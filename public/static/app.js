@@ -595,15 +595,17 @@ function renderUserLayout(page, params) {
         <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase;">메인 메뉴</p>
       </div>
       ${[
-        { id: 'dashboard', icon: 'fas fa-tachometer-alt', label: '대시보드' },
-        { id: 'signals',   icon: 'fas fa-signal',         label: '주가 시그널' },
-        { id: 'kospi',     icon: 'fas fa-chart-line',     label: 'KOSPI' },
-        { id: 'kosdaq',    icon: 'fas fa-chart-bar',      label: 'KOSDAQ' },
-        { id: 'news',      icon: 'fas fa-newspaper',      label: '뉴스 & 종목' },
+        { id: 'dashboard', icon: 'fas fa-tachometer-alt', label: '대시보드', badge: '' },
+        { id: 'signals',   icon: 'fas fa-signal',         label: '주가 시그널', badge: '' },
+        { id: 'kospi',     icon: 'fas fa-chart-line',     label: 'KOSPI', badge: '' },
+        { id: 'kosdaq',    icon: 'fas fa-chart-bar',      label: 'KOSDAQ', badge: '' },
+        { id: 'news',      icon: 'fas fa-newspaper',      label: '뉴스 & 종목 추천', badge: 'LIVE' },
       ].map(item => `
-        <div class="sidebar-item ${page === item.id ? 'active' : ''}" onclick="navigate('${item.id}')">
+        <div class="sidebar-item ${page === item.id ? 'active' : ''}" onclick="navigate('${item.id}')"
+          style="${item.id === 'news' ? 'border-left: 2px solid rgba(249,115,22,0.4);' : ''}">
           <i class="${item.icon}" style="width:16px; text-align:center; font-size:14px;"></i>
-          <span style="font-size:14px;">${item.label}</span>
+          <span style="font-size:14px; flex:1;">${item.label}</span>
+          ${item.badge ? `<span style="font-size:9px; font-weight:800; color:#22c55e; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.25); border-radius:4px; padding:1px 5px; letter-spacing:0.05em;">${item.badge}</span>` : ''}
         </div>
       `).join('')}
 
@@ -798,6 +800,33 @@ async function renderDashboard() {
               `).join('')}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- 빠른 이동 배너 -->
+      <div onclick="navigate('news')" style="
+        margin-top:20px; padding:18px 24px; border-radius:16px; cursor:pointer;
+        background:linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(245,158,11,0.05) 100%);
+        border:1px solid rgba(249,115,22,0.2);
+        display:flex; align-items:center; justify-content:space-between;
+        transition:all 0.3s ease;
+      "
+      onmouseover="this.style.borderColor='rgba(249,115,22,0.4)'; this.style.background='linear-gradient(135deg, rgba(249,115,22,0.12) 0%, rgba(245,158,11,0.08) 100%)'"
+      onmouseout="this.style.borderColor='rgba(249,115,22,0.2)'; this.style.background='linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(245,158,11,0.05) 100%)'">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <div style="width:46px; height:46px; background:var(--brand-gradient); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">
+            📰
+          </div>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
+              <span style="font-size:16px; font-weight:700; color:white;">실시간 뉴스 & 종목 추천</span>
+              <span style="font-size:10px; font-weight:800; color:#22c55e; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.25); border-radius:4px; padding:2px 6px;">● LIVE</span>
+            </div>
+            <p style="font-size:13px; color:#6b7280;">최신 금융 뉴스와 관련 종목 시그널 · 매수 추천 TOP5 · 섹터 강도 분석을 실시간으로 확인하세요</p>
+          </div>
+        </div>
+        <div style="color:var(--brand-orange); font-size:20px; flex-shrink:0;">
+          <i class="fas fa-chevron-right"></i>
         </div>
       </div>
     `
@@ -1021,104 +1050,426 @@ async function renderMarket(market) {
 }
 
 // ============================================================
-// NEWS PAGE
+// NEWS & RECOMMEND PAGE  (실시간 자동 갱신)
 // ============================================================
+
+let newsRefreshTimer = null   // 자동 갱신 타이머
+let newsCountdown   = 30      // 카운트다운 초
+
 async function renderNews() {
   const content = document.getElementById('page-content')
+  if (!content) return
+
+  // 이전 타이머 정리
+  if (newsRefreshTimer) { clearInterval(newsRefreshTimer); newsRefreshTimer = null }
+
   content.innerHTML = `
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; flex-wrap:wrap; gap:16px;">
+    <!-- 헤더 -->
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:14px;">
       <div>
-        <h1 style="font-size:26px; font-weight:800; color:white;">뉴스 & 관련 종목</h1>
-        <p style="color:#6b7280; font-size:14px; margin-top:4px;">최신 금융 뉴스와 관련 주식 종목 분석</p>
+        <h1 style="font-size:26px; font-weight:800; color:white; display:flex; align-items:center; gap:10px;">
+          <i class="fas fa-newspaper" style="color:var(--brand-orange);"></i>
+          실시간 뉴스 &amp; 종목 추천
+        </h1>
+        <p style="color:#6b7280; font-size:13px; margin-top:6px;">
+          최신 금융 뉴스와 뉴스 기반 관련 종목 추천을 실시간으로 제공합니다
+        </p>
       </div>
-      <div style="display:flex; gap:10px;">
-        <input type="text" id="news-search" class="form-input" placeholder="종목명 또는 키워드 검색" style="width:220px; padding:10px 14px;">
-        <button onclick="searchNews()" class="btn-primary" style="padding:10px 20px; font-size:14px;">
-          <i class="fas fa-search"></i>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <!-- 검색 -->
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="news-search"
+            class="form-input"
+            placeholder="종목·키워드 검색"
+            style="width:190px; padding:9px 14px; font-size:13px;"
+            onkeydown="if(event.key==='Enter') searchNews()">
+          <button onclick="searchNews()" class="btn-primary" style="padding:9px 16px; font-size:13px; border-radius:8px;">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+        <!-- 자동갱신 표시 -->
+        <div style="display:flex; align-items:center; gap:8px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:20px; padding:6px 14px;">
+          <div id="live-dot" style="width:7px; height:7px; background:#22c55e; border-radius:50%; box-shadow:0 0 6px #22c55e; animation: glow 2s ease-in-out infinite;"></div>
+          <span style="font-size:12px; color:#22c55e; font-weight:700;">LIVE</span>
+          <span style="font-size:11px; color:#4b5563;" id="refresh-countdown">30초 후 갱신</span>
+        </div>
+        <button onclick="manualRefreshNews()" style="background:rgba(249,115,22,0.1); border:1px solid rgba(249,115,22,0.2); color:var(--brand-orange); padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;">
+          <i class="fas fa-sync-alt"></i>
         </button>
       </div>
     </div>
 
-    <div id="news-content">
-      <div style="display:flex; justify-content:center; padding:60px;"><div class="spinner"></div></div>
+    <!-- 마지막 갱신 시각 -->
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
+      <i class="fas fa-clock" style="color:#4b5563; font-size:12px;"></i>
+      <span style="font-size:12px; color:#4b5563;" id="last-updated">갱신 중...</span>
+    </div>
+
+    <!-- 2단 레이아웃: 좌(뉴스 목록) + 우(추천 패널) -->
+    <div style="display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start;">
+
+      <!-- 좌: 뉴스 목록 -->
+      <div>
+        <!-- 카테고리 탭 -->
+        <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+          <button class="tab-btn active" id="ntab-all"    onclick="switchNewsTab('all',    '주식 코스피 코스닥')">전체</button>
+          <button class="tab-btn"        id="ntab-kospi"  onclick="switchNewsTab('kospi',  'KOSPI 코스피')">KOSPI</button>
+          <button class="tab-btn"        id="ntab-kosdaq" onclick="switchNewsTab('kosdaq', 'KOSDAQ 코스닥')">KOSDAQ</button>
+          <button class="tab-btn"        id="ntab-bio"    onclick="switchNewsTab('bio',    '바이오 제약 임상')">바이오</button>
+          <button class="tab-btn"        id="ntab-semi"   onclick="switchNewsTab('semi',   '반도체 AI 시스템반도체')">반도체·AI</button>
+          <button class="tab-btn"        id="ntab-bat"    onclick="switchNewsTab('bat',    '2차전지 배터리 전기차')">2차전지</button>
+          <button class="tab-btn"        id="ntab-robot"  onclick="switchNewsTab('robot',  '로봇 AI로봇')">로봇</button>
+        </div>
+        <div id="news-list">
+          <div style="display:flex; justify-content:center; padding:60px;"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- 우: 추천 사이드패널 -->
+      <div style="position:sticky; top:20px;">
+        <!-- 상단 추천 -->
+        <div style="background:rgba(22,27,34,0.9); border:1px solid rgba(249,115,22,0.15); border-radius:16px; overflow:hidden; margin-bottom:16px;">
+          <div style="padding:16px 18px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="width:8px; height:8px; background:var(--brand-orange); border-radius:50%; box-shadow:0 0 8px var(--brand-orange);"></div>
+              <span style="font-size:14px; font-weight:700; color:white;">TODAY 매수 추천 TOP 5</span>
+            </div>
+            <span style="font-size:11px; color:#4b5563;">강도순</span>
+          </div>
+          <div id="rec-buy-list">
+            <div style="display:flex; justify-content:center; padding:30px;"><div class="spinner" style="width:28px; height:28px; border-width:2px;"></div></div>
+          </div>
+        </div>
+
+        <!-- 섹터 히트맵 -->
+        <div style="background:rgba(22,27,34,0.9); border:1px solid rgba(249,115,22,0.1); border-radius:16px; overflow:hidden; margin-bottom:16px;">
+          <div style="padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.05);">
+            <span style="font-size:13px; font-weight:700; color:white;"><i class="fas fa-fire" style="color:var(--brand-orange); margin-right:6px;"></i>섹터 강도</span>
+          </div>
+          <div id="sector-list" style="padding:12px 14px;">
+            <div style="display:flex; justify-content:center; padding:20px;"><div class="spinner" style="width:24px; height:24px; border-width:2px;"></div></div>
+          </div>
+        </div>
+
+        <!-- 주의 종목 -->
+        <div style="background:rgba(22,27,34,0.9); border:1px solid rgba(239,68,68,0.12); border-radius:16px; overflow:hidden;">
+          <div style="padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; gap:8px;">
+            <div style="width:8px; height:8px; background:#ef4444; border-radius:50%; box-shadow:0 0 8px #ef4444;"></div>
+            <span style="font-size:13px; font-weight:700; color:white;">주의 종목</span>
+          </div>
+          <div id="rec-sell-list">
+            <div style="display:flex; justify-content:center; padding:20px;"><div class="spinner" style="width:24px; height:24px; border-width:2px;"></div></div>
+          </div>
+        </div>
+      </div>
     </div>
   `
 
-  await loadNews()
+  // 초기 데이터 로드 (병렬)
+  await Promise.all([
+    loadNewsList('주식 코스피 코스닥'),
+    loadRecommendPanel()
+  ])
+
+  // 카운트다운 + 자동 갱신
+  newsCountdown = 30
+  newsRefreshTimer = setInterval(async () => {
+    newsCountdown--
+    const el = document.getElementById('refresh-countdown')
+    if (el) el.textContent = `${newsCountdown}초 후 갱신`
+
+    if (newsCountdown <= 0) {
+      newsCountdown = 30
+      const query = window._currentNewsQuery || '주식 코스피 코스닥'
+      await Promise.all([
+        loadNewsList(query, true),   // true = silent (스피너 없이)
+        loadRecommendPanel(true)
+      ])
+      const lu = document.getElementById('last-updated')
+      if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')}`
+    }
+  }, 1000)
+}
+
+window._currentNewsQuery = '주식 코스피 코스닥'
+window._currentNewsTab   = 'all'
+
+async function switchNewsTab(tab, query) {
+  // 탭 활성화
+  ;['all','kospi','kosdaq','bio','semi','bat','robot'].forEach(t => {
+    const el = document.getElementById(`ntab-${t}`)
+    if (el) el.classList.toggle('active', t === tab)
+  })
+  window._currentNewsTab   = tab
+  window._currentNewsQuery = query
+  await loadNewsList(query)
 }
 
 async function searchNews() {
-  const query = document.getElementById('news-search')?.value || '주식'
-  await loadNews(query)
+  const q = (document.getElementById('news-search')?.value || '').trim()
+  if (!q) return
+  window._currentNewsQuery = q
+  // 탭 모두 비활성
+  ;['all','kospi','kosdaq','bio','semi','bat','robot'].forEach(t => {
+    const el = document.getElementById(`ntab-${t}`)
+    if (el) el.classList.remove('active')
+  })
+  await loadNewsList(q)
 }
 
-async function loadNews(query = '주식 코스피 코스닥') {
-  const content = document.getElementById('news-content')
-  if (!content) return
-  content.innerHTML = '<div style="display:flex; justify-content:center; padding:60px;"><div class="spinner"></div></div>'
+async function manualRefreshNews() {
+  newsCountdown = 30
+  const el = document.getElementById('refresh-countdown')
+  if (el) el.textContent = '30초 후 갱신'
+  const query = window._currentNewsQuery || '주식 코스피 코스닥'
+  await Promise.all([
+    loadNewsList(query),
+    loadRecommendPanel()
+  ])
+}
+
+// 뉴스 목록 로드
+async function loadNewsList(query = '주식 코스피 코스닥', silent = false) {
+  const list = document.getElementById('news-list')
+  if (!list) return
+
+  if (!silent) {
+    list.innerHTML = '<div style="display:flex; justify-content:center; padding:60px;"><div class="spinner"></div></div>'
+  }
 
   try {
     const res = await api.get(`/news?query=${encodeURIComponent(query)}&display=20`)
-    const news = res.success ? res.news : []
+    const news   = res.success ? res.news : []
     const isMock = res.isMock
 
-    content.innerHTML = `
+    // 뉴스에 등장하는 종목 코드 수집
+    const allCodes = [...new Set(news.flatMap(n => (n.relatedStocks || []).map(s => s.code)))]
+
+    // 관련 종목 시그널 병렬 조회
+    let stockSigMap = {}
+    if (allCodes.length > 0) {
+      try {
+        const sigRes = await api.get(`/recommend/news-stocks?codes=${allCodes.join(',')}`)
+        if (sigRes.success) {
+          for (const s of sigRes.stocks) stockSigMap[s.code] = s
+        }
+      } catch(_) {}
+    }
+
+    list.innerHTML = `
       ${isMock ? `
-        <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); border-radius:12px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
-          <i class="fas fa-info-circle" style="color:#f59e0b;"></i>
-          <span style="font-size:13px; color:#d97706;">네이버 뉴스 API 키 미설정 - 샘플 데이터 표시 중</span>
+        <div style="background:rgba(245,158,11,0.07); border:1px solid rgba(245,158,11,0.18); border-radius:10px; padding:11px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+          <i class="fas fa-satellite-dish" style="color:#f59e0b; font-size:13px;"></i>
+          <span style="font-size:12px; color:#d97706;">네이버 뉴스 API 미설정 — 샘플 뉴스 데이터 표시 중</span>
         </div>
       ` : ''}
-      
-      <div style="display:grid; gap:16px;">
-        ${news.map(n => `
-          <div class="news-card" onclick="window.open('${n.link}', '_blank')">
-            <div style="display:flex; gap:16px; align-items:flex-start;">
-              <div style="flex:1;">
-                <h3 style="font-size:15px; font-weight:700; color:white; margin-bottom:8px; line-height:1.5;">${n.title}</h3>
-                <p style="font-size:13px; color:#6b7280; line-height:1.6; margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${n.description || ''}</p>
-                
-                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-                  <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                    ${(n.relatedStocks || []).map(s => `
-                      <div style="display:flex; align-items:center; gap:6px; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.15); border-radius:20px; padding:4px 12px;">
-                        <span class="${s.market === 'KOSPI' ? 'badge-kospi' : 'badge-kosdaq'}" style="font-size:10px;">${s.market}</span>
-                        <span style="font-size:12px; font-weight:600; color:#f97316;">${s.name}</span>
-                        <span style="font-size:11px; color:#4b5563;">${s.code}</span>
-                      </div>
-                    `).join('')}
-                    ${(n.relatedStocks || []).length === 0 ? '<span style="font-size:12px; color:#374151;"><i class="fas fa-tag" style="margin-right:4px;"></i>관련 종목 없음</span>' : ''}
-                  </div>
-                  
-                  <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:12px; color:#374151;"><i class="fas fa-clock" style="margin-right:4px;"></i>${formatDate(n.pubDate)}</span>
-                    <span style="font-size:12px; color:var(--brand-orange);"><i class="fas fa-external-link-alt" style="margin-right:4px;"></i>원문 보기</span>
-                  </div>
-                </div>
+
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        ${news.map((n, idx) => {
+          const stocks = n.relatedStocks || []
+          const enrichedStocks = stocks.map(s => stockSigMap[s.code] ? { ...s, ...stockSigMap[s.code] } : s)
+
+          return `
+          <div class="news-card" style="padding:18px 20px; animation:fadeInUp 0.4s ease both; animation-delay:${idx * 0.04}s;"
+            onclick="openNewsLink('${n.link}')">
+
+            <!-- 제목 + 시각 -->
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:8px;">
+              <h3 style="font-size:14px; font-weight:700; color:white; line-height:1.5; flex:1;">${n.title}</h3>
+              <span style="font-size:11px; color:#374151; white-space:nowrap; margin-top:2px; flex-shrink:0;">
+                <i class="fas fa-clock" style="margin-right:3px;"></i>${formatDate(n.pubDate)}
+              </span>
+            </div>
+
+            <!-- 본문 요약 -->
+            <p style="font-size:12px; color:#6b7280; line-height:1.6; margin-bottom:12px;
+              display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
+              ${n.description || ''}
+            </p>
+
+            <!-- 관련 종목 + 시그널 -->
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                ${enrichedStocks.length > 0 ? enrichedStocks.map(s => {
+                  const sig    = s.signal || 'HOLD'
+                  const sigCol = sig === 'BUY' ? '#22c55e' : sig === 'SELL' ? '#ef4444' : '#f59e0b'
+                  const sigBg  = sig === 'BUY' ? 'rgba(34,197,94,0.08)' : sig === 'SELL' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)'
+                  const sigBd  = sig === 'BUY' ? 'rgba(34,197,94,0.2)' : sig === 'SELL' ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'
+                  const crCol  = (s.changeRate||0) >= 0 ? '#ef4444' : '#3b82f6'
+                  return `
+                    <div onclick="event.stopPropagation(); showStockDetail('${s.code}','${s.name}')"
+                      style="display:flex; align-items:center; gap:5px;
+                        background:${sigBg}; border:1px solid ${sigBd};
+                        border-radius:20px; padding:4px 10px; cursor:pointer; transition:all 0.2s;"
+                      onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
+                      <span style="font-size:9px; font-weight:700; color:${s.market==='KOSPI'?'#60a5fa':'#c084fc'}; border:1px solid ${s.market==='KOSPI'?'rgba(96,165,250,0.3)':'rgba(192,132,252,0.3)'}; border-radius:3px; padding:1px 4px;">${s.market||''}</span>
+                      <span style="font-size:12px; font-weight:700; color:white;">${s.name}</span>
+                      ${s.changeRate !== undefined ? `<span style="font-size:11px; color:${crCol}; font-weight:600;">${(s.changeRate||0)>=0?'▲':'▼'}${Math.abs(s.changeRate||0).toFixed(1)}%</span>` : ''}
+                      <span style="font-size:10px; font-weight:700; color:${sigCol}; background:${sigBg}; padding:1px 5px; border-radius:4px;">${sig}</span>
+                    </div>
+                  `
+                }).join('') : `<span style="font-size:11px; color:#374151;"><i class="fas fa-tag" style="margin-right:3px;"></i>관련 종목 없음</span>`}
+              </div>
+              <span style="font-size:11px; color:var(--brand-orange); white-space:nowrap;">
+                <i class="fas fa-external-link-alt" style="margin-right:3px;"></i>원문
+              </span>
+            </div>
+          </div>
+          `
+        }).join('')}
+      </div>
+
+      ${news.length === 0 ? `
+        <div style="text-align:center; color:#4b5563; padding:60px;">
+          <i class="fas fa-newspaper" style="font-size:40px; display:block; margin-bottom:16px; color:#374151;"></i>
+          뉴스를 불러올 수 없습니다
+        </div>
+      ` : ''}
+    `
+
+    // 갱신 시각 업데이트
+    const lu = document.getElementById('last-updated')
+    if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')}`
+
+  } catch (err) {
+    list.innerHTML = '<div style="color:#ef4444; padding:20px; text-align:center;">뉴스 로드 실패 — 잠시 후 자동 재시도합니다</div>'
+  }
+}
+
+// 우측 추천 패널 로드
+async function loadRecommendPanel(silent = false) {
+  await Promise.all([
+    loadRecBuy(silent),
+    loadSectorPanel(silent),
+    loadRecSell(silent),
+  ])
+}
+
+async function loadRecBuy(silent = false) {
+  const el = document.getElementById('rec-buy-list')
+  if (!el) return
+  if (!silent) el.innerHTML = '<div style="display:flex; justify-content:center; padding:30px;"><div class="spinner" style="width:28px; height:28px; border-width:2px;"></div></div>'
+
+  try {
+    const res = await api.get('/recommend/top?type=BUY&limit=5')
+    const stocks = res.success ? res.stocks : []
+
+    el.innerHTML = `
+      <div style="padding:8px 6px;">
+        ${stocks.map((s, i) => `
+          <div onclick="showStockDetail('${s.code}','${s.name}')"
+            style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; transition:background 0.2s; margin-bottom:2px;"
+            onmouseover="this.style.background='rgba(249,115,22,0.06)'" onmouseout="this.style.background='transparent'">
+            <!-- 순위 -->
+            <div style="width:22px; height:22px; border-radius:50%; background:${i===0?'var(--brand-gradient)':i===1?'rgba(249,115,22,0.3)':i===2?'rgba(249,115,22,0.15)':'rgba(255,255,255,0.05)'}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:${i<3?'white':'#4b5563'}; flex-shrink:0;">${i+1}</div>
+            <!-- 종목 정보 -->
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">
+                <span style="font-size:13px; font-weight:700; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${s.name}</span>
+                <span style="font-size:9px; font-weight:700; color:${s.market==='KOSPI'?'#60a5fa':'#c084fc'}; border:1px solid ${s.market==='KOSPI'?'rgba(96,165,250,0.3)':'rgba(192,132,252,0.3)'}; border-radius:3px; padding:1px 4px; flex-shrink:0;">${s.market}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:11px; color:#9ca3af;">${(s.price||0).toLocaleString()}원</span>
+                <span style="font-size:11px; color:${(s.changeRate||0)>=0?'#ef4444':'#3b82f6'}; font-weight:600;">${(s.changeRate||0)>=0?'▲':'▼'}${Math.abs(s.changeRate||0).toFixed(1)}%</span>
+              </div>
+            </div>
+            <!-- 강도 바 -->
+            <div style="text-align:right; flex-shrink:0;">
+              <div style="font-size:13px; font-weight:800; color:#22c55e;">${s.strength}%</div>
+              <div style="width:48px; height:4px; background:#1f2937; border-radius:2px; margin-top:3px;">
+                <div style="width:${s.strength}%; height:100%; border-radius:2px; background:linear-gradient(90deg,#16a34a,#22c55e);"></div>
               </div>
             </div>
           </div>
         `).join('')}
+        ${stocks.length === 0 ? '<div style="text-align:center; color:#4b5563; padding:20px; font-size:13px;">추천 종목 없음</div>' : ''}
       </div>
-      
-      ${news.length === 0 ? '<div style="text-align:center; color:#4b5563; padding:60px;"><i class="fas fa-newspaper" style="font-size:40px; display:block; margin-bottom:16px;"></i>뉴스를 불러올 수 없습니다</div>' : ''}
     `
-  } catch (err) {
-    content.innerHTML = '<div style="color:#ef4444; padding:20px;">뉴스 로드 실패</div>'
-  }
+  } catch(_) {}
+}
+
+async function loadSectorPanel(silent = false) {
+  const el = document.getElementById('sector-list')
+  if (!el) return
+  if (!silent) el.innerHTML = '<div style="display:flex; justify-content:center; padding:20px;"><div class="spinner" style="width:24px; height:24px; border-width:2px;"></div></div>'
+
+  try {
+    const res = await api.get('/recommend/sectors')
+    const sectors = res.success ? res.sectors : []
+
+    el.innerHTML = sectors.slice(0, 6).map(sec => {
+      const pct  = sec.avgStrength
+      const col  = pct >= 65 ? '#22c55e' : pct <= 40 ? '#ef4444' : '#f59e0b'
+      const bg   = pct >= 65 ? 'rgba(34,197,94,0.08)' : pct <= 40 ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)'
+      return `
+        <div style="margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:12px; font-weight:600; color:#d1d5db;">${sec.sector}</span>
+              <span style="font-size:10px; color:#4b5563;">${sec.topStock?.name||''}</span>
+            </div>
+            <span style="font-size:12px; font-weight:700; color:${col};">${pct}%</span>
+          </div>
+          <div style="height:5px; background:#1f2937; border-radius:3px; overflow:hidden;">
+            <div style="width:${pct}%; height:100%; background:${col}; border-radius:3px; transition:width 0.5s ease;"></div>
+          </div>
+        </div>
+      `
+    }).join('')
+  } catch(_) {}
+}
+
+async function loadRecSell(silent = false) {
+  const el = document.getElementById('rec-sell-list')
+  if (!el) return
+  if (!silent) el.innerHTML = '<div style="display:flex; justify-content:center; padding:20px;"><div class="spinner" style="width:24px; height:24px; border-width:2px;"></div></div>'
+
+  try {
+    const res = await api.get('/recommend/top?type=SELL&limit=4')
+    const stocks = res.success ? res.stocks : []
+
+    el.innerHTML = `
+      <div style="padding:6px 6px 10px;">
+        ${stocks.map(s => `
+          <div onclick="showStockDetail('${s.code}','${s.name}')"
+            style="display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border-radius:8px; cursor:pointer; transition:background 0.2s;"
+            onmouseover="this.style.background='rgba(239,68,68,0.06)'" onmouseout="this.style.background='transparent'">
+            <div>
+              <div style="font-size:13px; font-weight:600; color:white;">${s.name}
+                <span style="font-size:9px; color:${s.market==='KOSPI'?'#60a5fa':'#c084fc'}; margin-left:4px;">${s.market}</span>
+              </div>
+              <div style="font-size:11px; color:#3b82f6; margin-top:1px;">▼ ${Math.abs(s.changeRate||0).toFixed(1)}%</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:12px; font-weight:700; color:#ef4444;">SELL</div>
+              <div style="font-size:11px; color:#6b7280;">${s.strength}%</div>
+            </div>
+          </div>
+        `).join('')}
+        ${stocks.length === 0 ? '<div style="text-align:center; color:#4b5563; padding:16px; font-size:12px;">주의 종목 없음</div>' : ''}
+      </div>
+    `
+  } catch(_) {}
+}
+
+function openNewsLink(url) {
+  if (!url || url === 'undefined') return
+  window.open(url, '_blank')
 }
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
   try {
-    const d = new Date(dateStr)
+    const d   = new Date(dateStr)
     const now = new Date()
     const diff = now - d
-    if (diff < 3600000) return Math.floor(diff/60000) + '분 전'
-    if (diff < 86400000) return Math.floor(diff/3600000) + '시간 전'
-    return d.toLocaleDateString('ko-KR')
+    if (diff < 60000)     return '방금 전'
+    if (diff < 3600000)   return Math.floor(diff / 60000)   + '분 전'
+    if (diff < 86400000)  return Math.floor(diff / 3600000) + '시간 전'
+    return d.toLocaleDateString('ko-KR', { month:'numeric', day:'numeric' })
   } catch { return '' }
 }
+
 
 // ============================================================
 // STOCK DETAIL MODAL

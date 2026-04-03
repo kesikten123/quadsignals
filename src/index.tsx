@@ -6,6 +6,7 @@ import { adminRoutes } from './routes/admin'
 import { signalRoutes } from './routes/signals'
 import { newsRoutes } from './routes/news'
 import { stockRoutes } from './routes/stocks'
+import { recommendRoutes } from './routes/recommend'
 
 type Bindings = {
   DB: D1Database
@@ -34,6 +35,7 @@ app.route('/api/admin', adminRoutes)
 app.route('/api/signals', signalRoutes)
 app.route('/api/news', newsRoutes)
 app.route('/api/stocks', stockRoutes)
+app.route('/api/recommend', recommendRoutes)
 
 // Health check
 app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
