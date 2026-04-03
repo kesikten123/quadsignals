@@ -504,77 +504,125 @@ async function handleRegister(e) {
 // ============================================================
 function renderUserLayout(page, params) {
   const app = document.getElementById('app')
+  // navbar=64px, ticker=36px => sidebar/main top = 100px
   app.innerHTML = `
-    <!-- Ticker Tape -->
-    <div class="ticker-tape" style="margin-top:64px; position:fixed; top:64px; left:0; right:0; z-index:99;">
-      <div class="ticker-inner" id="ticker-content">
-        <span style="color:#9ca3af; margin:0 20px;">
-          삼성전자 <span class="price-up">▲ 72,500</span> (+1.68%) &nbsp;|&nbsp;
-          SK하이닉스 <span class="price-down">▼ 185,000</span> (-1.33%) &nbsp;|&nbsp;
-          에코프로비엠 <span class="price-up">▲ 115,000</span> (+7.97%) &nbsp;|&nbsp;
-          HLB <span class="price-up">▲ 95,000</span> (+14.46%) &nbsp;|&nbsp;
-          NAVER <span class="price-down">▼ 198,000</span> (-1.49%) &nbsp;|&nbsp;
-          현대차 <span class="price-up">▲ 235,000</span> (+1.29%) &nbsp;|&nbsp;
-          셀트리온 <span class="price-up">▲ 175,000</span> (+2.94%) &nbsp;|&nbsp;
-          카카오 <span class="price-down">▼ 42,000</span> (-1.18%) &nbsp;|&nbsp;
-          알테오젠 <span class="price-up">▲ 285,000</span> (+6.74%) &nbsp;|&nbsp;
-          루닛 <span class="price-up">▲ 58,000</span> (+8.41%)
-        </span>
-      </div>
-    </div>
-
-    <!-- Navbar -->
-    <nav class="navbar" style="display:flex; align-items:center; justify-content:space-between; padding:0 24px;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <button onclick="toggleSidebar()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:18px; padding:8px;">
+    <!-- Navbar (fixed, z=1000) -->
+    <nav style="
+      position:fixed; top:0; left:0; right:0; height:64px; z-index:1000;
+      background:rgba(8,13,20,0.97); backdrop-filter:blur(20px);
+      border-bottom:1px solid rgba(249,115,22,0.12);
+      display:flex; align-items:center; justify-content:space-between; padding:0 20px;
+    ">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button onclick="toggleSidebar()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:18px; padding:6px 10px; border-radius:8px; transition:background 0.2s;"
+          onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='none'">
           <i class="fas fa-bars"></i>
         </button>
-        <img src="/static/logo.png" alt="QUAD" style="height:36px;" onerror="this.style.display='none'">
-        <div>
-          <span style="font-weight:800; font-size:16px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</span>
-          <span style="font-size:10px; color:#4b5563; margin-left:4px; letter-spacing:0.1em;">SIGNALS</span>
+        <img src="/static/logo.png" alt="QUAD" style="height:38px;" onerror="this.style.display='none'">
+        <div style="line-height:1;">
+          <div style="font-weight:800; font-size:17px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
+          <div style="font-size:9px; color:#4b5563; letter-spacing:0.15em; margin-top:1px;">DECISIVE SIGNALS</div>
         </div>
       </div>
-      <div style="display:flex; align-items:center; gap:16px;">
-        <div style="width:8px; height:8px; background:#22c55e; border-radius:50%; animation: glow 2s ease-in-out infinite;"></div>
-        <span style="font-size:12px; color:#22c55e; font-weight:600;">LIVE</span>
-        <div style="width:1px; height:24px; background:var(--brand-border);"></div>
-        <div style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-          <div style="width:36px; height:36px; background:var(--brand-gradient); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">
-            ${currentUser?.name?.[0] || 'U'}
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <div style="width:7px; height:7px; background:#22c55e; border-radius:50%; box-shadow:0 0 6px #22c55e;"></div>
+          <span style="font-size:11px; color:#22c55e; font-weight:700; letter-spacing:0.05em;">LIVE</span>
+        </div>
+        <div style="width:1px; height:22px; background:rgba(255,255,255,0.06);"></div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:34px; height:34px; background:linear-gradient(135deg,#e83a00,#f59e0b); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; color:white; flex-shrink:0;">
+            ${(currentUser?.name?.[0] || 'U').toUpperCase()}
           </div>
-          <div>
-            <div style="font-size:14px; font-weight:600; color:white;">${currentUser?.name || '사용자'}</div>
-            <div style="font-size:11px; color:#4b5563;">일반 회원</div>
+          <div style="line-height:1.3;">
+            <div style="font-size:13px; font-weight:600; color:white;">${currentUser?.name || '사용자'}</div>
+            <div style="font-size:10px; color:#4b5563;">일반 회원</div>
           </div>
         </div>
-        <button onclick="handleLogout()" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;">
+        <button onclick="handleLogout()" title="로그아웃"
+          style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); color:#ef4444; padding:7px 14px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(239,68,68,0.18)'" onmouseout="this.style.background='rgba(239,68,68,0.08)'">
           <i class="fas fa-sign-out-alt"></i>
         </button>
       </div>
     </nav>
 
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar" style="padding-top:16px;">
-      <div style="padding:0 12px 16px; border-bottom:1px solid var(--brand-border); margin-bottom:8px;">
-        <p style="font-size:11px; font-weight:600; color:#374151; letter-spacing:0.1em; padding:0 8px;">메인 메뉴</p>
+    <!-- Ticker Tape (fixed, z=999, top=64px) -->
+    <div style="
+      position:fixed; top:64px; left:0; right:0; z-index:999;
+      background:rgba(8,13,20,0.95); border-bottom:1px solid rgba(249,115,22,0.08);
+      overflow:hidden; white-space:nowrap; height:34px; display:flex; align-items:center;
+    ">
+      <div style="display:inline-block; animation:ticker 40s linear infinite; padding-left:100%;">
+        <span style="font-size:12px; color:#9ca3af;">
+          삼성전자&nbsp;<span style="color:#ef4444;">▲ 72,500</span>&nbsp;<span style="color:#4b5563;">(+1.68%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          SK하이닉스&nbsp;<span style="color:#3b82f6;">▼ 185,000</span>&nbsp;<span style="color:#4b5563;">(-1.33%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          에코프로비엠&nbsp;<span style="color:#ef4444;">▲ 115,000</span>&nbsp;<span style="color:#4b5563;">(+7.97%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          HLB&nbsp;<span style="color:#ef4444;">▲ 95,000</span>&nbsp;<span style="color:#4b5563;">(+14.46%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          NAVER&nbsp;<span style="color:#3b82f6;">▼ 198,000</span>&nbsp;<span style="color:#4b5563;">(-1.49%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          현대차&nbsp;<span style="color:#ef4444;">▲ 235,000</span>&nbsp;<span style="color:#4b5563;">(+1.29%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          셀트리온&nbsp;<span style="color:#ef4444;">▲ 175,000</span>&nbsp;<span style="color:#4b5563;">(+2.94%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          카카오&nbsp;<span style="color:#3b82f6;">▼ 42,000</span>&nbsp;<span style="color:#4b5563;">(-1.18%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          알테오젠&nbsp;<span style="color:#ef4444;">▲ 285,000</span>&nbsp;<span style="color:#4b5563;">(+6.74%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          루닛&nbsp;<span style="color:#ef4444;">▲ 58,000</span>&nbsp;<span style="color:#4b5563;">(+8.41%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          레인보우로보틱스&nbsp;<span style="color:#ef4444;">▲ 185,000</span>&nbsp;<span style="color:#4b5563;">(+6.92%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          삼성SDI&nbsp;<span style="color:#3b82f6;">▼ 325,000</span>&nbsp;<span style="color:#4b5563;">(-1.52%)</span>
+          &nbsp;&nbsp;│&nbsp;&nbsp;
+          LG에너지솔루션&nbsp;<span style="color:#ef4444;">▲ 385,000</span>&nbsp;<span style="color:#4b5563;">(+2.26%)</span>
+          &nbsp;&nbsp;&nbsp;&nbsp;
+        </span>
+      </div>
+    </div>
+
+    <!-- Sidebar (fixed, top=98px, z=100) -->
+    <aside id="sidebar" style="
+      position:fixed; top:98px; left:0; bottom:0; width:240px; z-index:100;
+      background:rgba(10,14,20,0.98); border-right:1px solid rgba(249,115,22,0.08);
+      overflow-y:auto; padding:12px 0; transition:transform 0.3s ease;
+    ">
+      <div style="padding:0 16px 12px; margin-bottom:4px;">
+        <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase;">메인 메뉴</p>
       </div>
       ${[
         { id: 'dashboard', icon: 'fas fa-tachometer-alt', label: '대시보드' },
-        { id: 'signals', icon: 'fas fa-signal', label: '주가 시그널' },
-        { id: 'kospi', icon: 'fas fa-chart-line', label: 'KOSPI' },
-        { id: 'kosdaq', icon: 'fas fa-chart-bar', label: 'KOSDAQ' },
-        { id: 'news', icon: 'fas fa-newspaper', label: '뉴스 & 종목' },
+        { id: 'signals',   icon: 'fas fa-signal',         label: '주가 시그널' },
+        { id: 'kospi',     icon: 'fas fa-chart-line',     label: 'KOSPI' },
+        { id: 'kosdaq',    icon: 'fas fa-chart-bar',      label: 'KOSDAQ' },
+        { id: 'news',      icon: 'fas fa-newspaper',      label: '뉴스 & 종목' },
       ].map(item => `
         <div class="sidebar-item ${page === item.id ? 'active' : ''}" onclick="navigate('${item.id}')">
-          <i class="${item.icon}" style="width:18px; text-align:center;"></i>
-          <span>${item.label}</span>
+          <i class="${item.icon}" style="width:16px; text-align:center; font-size:14px;"></i>
+          <span style="font-size:14px;">${item.label}</span>
         </div>
       `).join('')}
+
+      <div style="margin: 16px 16px 0; padding-top:16px; border-top:1px solid rgba(255,255,255,0.04);">
+        <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:8px;">계정</p>
+      </div>
+      <div class="sidebar-item" onclick="handleLogout()">
+        <i class="fas fa-sign-out-alt" style="width:16px; text-align:center; font-size:14px; color:#ef4444;"></i>
+        <span style="font-size:14px; color:#ef4444;">로그아웃</span>
+      </div>
     </aside>
 
-    <!-- Main Content -->
-    <main class="main-content" style="margin-top:36px;" id="main-content">
+    <!-- Main Content (margin-left=240px, margin-top=98px) -->
+    <main id="main-content" style="
+      margin-left:240px; margin-top:98px;
+      padding:28px 28px 40px;
+      min-height:calc(100vh - 98px);
+      box-sizing:border-box;
+    ">
       <div id="page-content"></div>
     </main>
   `
@@ -590,7 +638,10 @@ function renderUserLayout(page, params) {
 
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar')
-  sidebar.classList.toggle('open')
+  const main = document.getElementById('main-content')
+  if (!sidebar) return
+  const isHidden = sidebar.style.transform === 'translateX(-100%)'
+  sidebar.style.transform = isHidden ? 'translateX(0)' : 'translateX(-100%)'
 }
 
 async function handleLogout() {
@@ -623,7 +674,7 @@ async function renderDashboard() {
   try {
     const [summaryRes, stocksRes] = await Promise.all([
       api.get('/signals/summary'),
-      api.get('/stocks?market=ALL&limit=10')
+      api.get('/stocks?market=ALL&limit=20')
     ])
 
     const summary = summaryRes.success ? summaryRes.summary : { buyCount: 0, sellCount: 0, strongBuys: [], strongSells: [] }
@@ -1213,61 +1264,82 @@ async function showStockDetail(code, name) {
 function renderAdminLayout(page, params) {
   const app = document.getElementById('app')
   app.innerHTML = `
-    <!-- Navbar -->
-    <nav class="navbar" style="display:flex; align-items:center; justify-content:space-between; padding:0 24px;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <button onclick="toggleSidebar()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:18px; padding:8px;">
+    <!-- Navbar (fixed, z=1000) -->
+    <nav style="
+      position:fixed; top:0; left:0; right:0; height:64px; z-index:1000;
+      background:rgba(8,13,20,0.97); backdrop-filter:blur(20px);
+      border-bottom:1px solid rgba(249,115,22,0.15);
+      display:flex; align-items:center; justify-content:space-between; padding:0 20px;
+    ">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button onclick="toggleSidebar()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:18px; padding:6px 10px; border-radius:8px; transition:background 0.2s;"
+          onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='none'">
           <i class="fas fa-bars"></i>
         </button>
-        <img src="/static/logo.png" alt="QUAD" style="height:36px;" onerror="this.style.display='none'">
-        <div>
-          <span style="font-weight:800; font-size:16px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</span>
-          <span style="font-size:10px; color:#4b5563; margin-left:4px; letter-spacing:0.1em;">ADMIN</span>
+        <img src="/static/logo.png" alt="QUAD" style="height:38px;" onerror="this.style.display='none'">
+        <div style="line-height:1;">
+          <div style="font-weight:800; font-size:17px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
+          <div style="font-size:9px; color:#4b5563; letter-spacing:0.15em; margin-top:1px;">ADMIN PANEL</div>
         </div>
-        <span class="admin-badge">관리자</span>
+        <span style="background:linear-gradient(135deg,#e83a00,#f59e0b); color:white; padding:3px 10px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.05em;">ADMIN</span>
       </div>
-      <div style="display:flex; align-items:center; gap:16px;">
+      <div style="display:flex; align-items:center; gap:14px;">
         <div style="display:flex; align-items:center; gap:10px;">
-          <div style="width:36px; height:36px; background:linear-gradient(135deg,#e83a00,#f59e0b); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700;">A</div>
-          <div>
-            <div style="font-size:14px; font-weight:600; color:white;">${currentUser?.name || '관리자'}</div>
-            <div style="font-size:11px; color:#f97316;">Administrator</div>
+          <div style="width:34px; height:34px; background:linear-gradient(135deg,#e83a00,#f59e0b); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; color:white; flex-shrink:0;">A</div>
+          <div style="line-height:1.3;">
+            <div style="font-size:13px; font-weight:600; color:white;">${currentUser?.name || '관리자'}</div>
+            <div style="font-size:10px; color:#f97316; font-weight:600;">Administrator</div>
           </div>
         </div>
-        <button onclick="handleLogout()" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;">
+        <button onclick="handleLogout()" title="로그아웃"
+          style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); color:#ef4444; padding:7px 14px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(239,68,68,0.18)'" onmouseout="this.style.background='rgba(239,68,68,0.08)'">
           <i class="fas fa-sign-out-alt"></i>
         </button>
       </div>
     </nav>
 
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar" style="padding-top:16px;">
-      <div style="padding:0 12px 16px; border-bottom:1px solid var(--brand-border); margin-bottom:8px;">
-        <p style="font-size:11px; font-weight:600; color:#374151; letter-spacing:0.1em; padding:0 8px;">관리자 메뉴</p>
+    <!-- Sidebar (fixed, top=64px, no ticker for admin) -->
+    <aside id="sidebar" style="
+      position:fixed; top:64px; left:0; bottom:0; width:240px; z-index:100;
+      background:rgba(10,14,20,0.98); border-right:1px solid rgba(249,115,22,0.1);
+      overflow-y:auto; padding:16px 0; transition:transform 0.3s ease;
+    ">
+      <div style="padding:0 16px 12px; margin-bottom:4px;">
+        <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase;">관리자 메뉴</p>
       </div>
       ${[
         { id: 'admin-dashboard', icon: 'fas fa-tachometer-alt', label: '관리 대시보드' },
-        { id: 'admin-pending', icon: 'fas fa-user-clock', label: '승인 대기' },
-        { id: 'admin-users', icon: 'fas fa-users', label: '전체 회원' },
-        { id: 'admin-signals', icon: 'fas fa-signal', label: '시그널 관리' },
+        { id: 'admin-pending',   icon: 'fas fa-user-clock',     label: '승인 대기' },
+        { id: 'admin-users',     icon: 'fas fa-users',          label: '전체 회원' },
+        { id: 'admin-signals',   icon: 'fas fa-signal',         label: '시그널 관리' },
       ].map(item => `
         <div class="sidebar-item ${page === item.id ? 'active' : ''}" onclick="navigate('${item.id}')">
-          <i class="${item.icon}" style="width:18px; text-align:center;"></i>
-          <span>${item.label}</span>
+          <i class="${item.icon}" style="width:16px; text-align:center; font-size:14px;"></i>
+          <span style="font-size:14px;">${item.label}</span>
         </div>
       `).join('')}
-      
-      <div style="padding:0 12px 16px; border-bottom:1px solid var(--brand-border); margin:16px 0 8px;">
-        <p style="font-size:11px; font-weight:600; color:#374151; letter-spacing:0.1em; padding:0 8px;">서비스</p>
+
+      <div style="margin:16px 16px 0; padding-top:16px; border-top:1px solid rgba(255,255,255,0.04);">
+        <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:8px;">서비스</p>
       </div>
       <div class="sidebar-item" onclick="navigate('dashboard')">
-        <i class="fas fa-chart-line" style="width:18px; text-align:center;"></i>
-        <span>사용자 뷰</span>
+        <i class="fas fa-chart-line" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">사용자 뷰</span>
+      </div>
+      <div class="sidebar-item" onclick="handleLogout()">
+        <i class="fas fa-sign-out-alt" style="width:16px; text-align:center; font-size:14px; color:#ef4444;"></i>
+        <span style="font-size:14px; color:#ef4444;">로그아웃</span>
       </div>
     </aside>
 
-    <!-- Main Content -->
-    <main class="main-content" id="main-content">
+    <!-- Main Content (margin-left=240px, margin-top=64px for admin) -->
+    <main id="main-content" style="
+      margin-left:240px; margin-top:64px;
+      padding:28px 28px 40px;
+      min-height:calc(100vh - 64px);
+      box-sizing:border-box;
+    ">
       <div id="page-content"></div>
     </main>
   `
@@ -1631,7 +1703,7 @@ async function loadAdminSignals() {
   if (!content) return
 
   try {
-    const res = await api.get('/signals/?limit=100')
+    const res = await api.get('/signals?limit=100')
     const signals = res.success ? res.signals : []
 
     content.innerHTML = `

@@ -26,7 +26,7 @@ const userAuth = async (c: any, next: any) => {
 signalRoutes.use('/*', userAuth)
 
 // 전체 시그널 목록
-signalRoutes.get('/', async (c) => {
+signalRoutes.get('', async (c) => {
   try {
     const market = c.req.query('market') || 'ALL'
     const type = c.req.query('type') || 'ALL'

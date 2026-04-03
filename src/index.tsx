@@ -38,6 +38,9 @@ app.route('/api/stocks', stockRoutes)
 // Health check
 app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
+// SPA fallback - /api/* 는 절대 fallback 타지 않도록 먼저 404 처리
+app.all('/api/*', (c) => c.json({ success: false, message: 'API endpoint not found' }, 404))
+
 // SPA fallback - serve index.html for all non-API routes
 app.get('*', async (c) => {
   return c.html(getIndexHTML())
