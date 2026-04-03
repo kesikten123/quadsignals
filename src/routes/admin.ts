@@ -141,3 +141,47 @@ adminRoutes.delete('/signals/:id', async (c) => {
     return c.json({ success: false, message: '오류가 발생했습니다.' }, 500)
   }
 })
+
+// 긴급 계정 초기화 - 인증 없이 접근 가능 (배포 직후 1회용)
+import { hashPassword } from '../lib/utils'
+adminRoutes.get('/emergency-reset', async (c) => {
+  try {
+    const adminHash = await hashPassword('Admin1234!')
+    const testHash = await hashPassword('Test1234!')
+
+    await c.env.DB.prepare(
+      `UPDATE users SET password_hash = ?, role = 'admin', status = 'approved' WHERE username = 'admin'`
+    ).bind(adminHash).run()
+
+    const existing = await c.env.DB.prepare(`SELECT id FROM users WHERE username = 'testuser'`).first()
+    if (!existing) {
+      await c.env.DB.prepare(
+        `INSERT INTO users (username, password_hash, name, phone, email, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind('testuser', testHash, '테스트유저', '010-1234-5678', 'test@test.com', 'user', 'approved').run()
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE users SET password_hash = ?, status = 'approved' WHERE username = 'testuser'`
+      ).bind(testHash).run()
+    }
+
+    // newadmin도 승인 처리
+    await c.env.DB.prepare(
+      `UPDATE users SET role = 'admin', status = 'approved' WHERE username = 'newadmin'`
+    ).run()
+
+    const users = await c.env.DB.prepare(`SELECT id, username, role, status FROM users`).all()
+
+    return c.json({ 
+      success: true, 
+      message: '긴급 계정 초기화 완료',
+      accounts: [
+        { username: 'admin', password: 'Admin1234!', role: 'admin' },
+        { username: 'testuser', password: 'Test1234!', role: 'user' },
+        { username: 'newadmin', password: 'Admin1234!', role: 'admin' }
+      ],
+      allUsers: users.results
+    })
+  } catch (e: any) {
+    return c.json({ success: false, error: e.message }, 500)
+  }
+})
