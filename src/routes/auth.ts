@@ -137,6 +137,42 @@ authRoutes.get('/verify', async (c) => {
   }
 })
 
+// 계정 초기화 (1회용 - 프로덕션 초기 설정용)
+authRoutes.get('/reset-accounts', async (c) => {
+  try {
+    const adminHash = await hashPassword('Admin1234!')
+    const testHash = await hashPassword('Test1234!')
+
+    // admin 비밀번호 업데이트
+    await c.env.DB.prepare(
+      `UPDATE users SET password_hash = ?, role = 'admin', status = 'approved' WHERE username = 'admin'`
+    ).bind(adminHash).run()
+
+    // testuser 생성 또는 업데이트
+    const existing = await c.env.DB.prepare(`SELECT id FROM users WHERE username = 'testuser'`).first()
+    if (!existing) {
+      await c.env.DB.prepare(
+        `INSERT INTO users (username, password_hash, name, phone, email, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind('testuser', testHash, '테스트유저', '010-1234-5678', 'test@test.com', 'user', 'approved').run()
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE users SET password_hash = ?, status = 'approved' WHERE username = 'testuser'`
+      ).bind(testHash).run()
+    }
+
+    return c.json({ 
+      success: true, 
+      message: '계정 초기화 완료',
+      accounts: [
+        { username: 'admin', password: 'Admin1234!', role: 'admin' },
+        { username: 'testuser', password: 'Test1234!', role: 'user' }
+      ]
+    })
+  } catch (e: any) {
+    return c.json({ success: false, error: e.message }, 500)
+  }
+})
+
 // 로그아웃
 authRoutes.post('/logout', async (c) => {
   try {
