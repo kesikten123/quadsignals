@@ -99,6 +99,8 @@ newsRoutes.get('/', async (c) => {
     })
 
     if (!response.ok) {
+      const errText = await response.text()
+      console.error('Naver API error:', response.status, errText)
       return c.json({ success: true, news: getMockNews(), isMock: true })
     }
 
@@ -110,7 +112,7 @@ newsRoutes.get('/', async (c) => {
       const relatedStocks = findRelatedStocks(cleanText)
       
       return {
-        id: Buffer.from(item.link).toString('base64').substring(0, 20),
+        id: btoa(item.link).substring(0, 20),
         title: item.title.replace(/<[^>]*>/g, ''),
         description: item.description.replace(/<[^>]*>/g, ''),
         link: item.link,
