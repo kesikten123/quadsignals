@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none">
+  <defs>
+    <!-- Main brand gradient -->
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e83a00"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <!-- Icon glow gradient -->
+    <radialGradient id="iconGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Icon inner gradient -->
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e83a00"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <!-- Subtle text shadow filter -->
+    <filter id="textGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <!-- Icon box shadow -->
+    <filter id="iconShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#f97316" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Icon: stylized Q / signal bars in a rounded square -->
+  <g filter="url(#iconShadow)">
+    <!-- Outer rounded square with gradient border -->
+    <rect x="2" y="4" width="52" height="52" rx="14" fill="rgba(249,115,22,0.08)" stroke="url(#brandGrad)" stroke-width="1.5"/>
+    <!-- Inner glow -->
+    <rect x="2" y="4" width="52" height="52" rx="14" fill="url(#iconGlow)"/>
+    
+    <!-- Signal bars (like a stock chart / signal strength) -->
+    <!-- Bar 1 (short) -->
+    <rect x="14" y="38" width="6" height="10" rx="3" fill="url(#brandGrad)" opacity="0.6"/>
+    <!-- Bar 2 (medium) -->
+    <rect x="23" y="30" width="6" height="18" rx="3" fill="url(#brandGrad)" opacity="0.8"/>
+    <!-- Bar 3 (tall) -->
+    <rect x="32" y="20" width="6" height="28" rx="3" fill="url(#brandGrad)"/>
+    <!-- Bar 4 (medium-tall) with upward arrow cap -->
+    <rect x="41" y="25" width="6" height="23" rx="3" fill="url(#brandGrad)" opacity="0.9"/>
+    
+    <!-- Arrow pointing up on bar 4 -->
+    <path d="M44 22 L41 26 L47 26 Z" fill="url(#brandGrad)"/>
+    
+    <!-- Horizontal baseline -->
+    <line x1="12" y1="49.5" x2="49" y2="49.5" stroke="rgba(249,115,22,0.35)" stroke-width="1" stroke-linecap="round"/>
+  </g>
+
+  <!-- Text: QUAD -->
+  <text
+    x="64"
+    y="33"
+    font-family="'Arial Black', 'Arial', sans-serif"
+    font-weight="900"
+    font-size="26"
+    letter-spacing="2"
+    fill="url(#brandGrad)"
+    filter="url(#textGlow)"
+  >QUAD</text>
+
+  <!-- Divider line -->
+  <line x1="64" y1="38" x2="218" y2="38" stroke="rgba(249,115,22,0.2)" stroke-width="0.75"/>
+
+  <!-- Subtitle: DECISIVE SIGNALS -->
+  <text
+    x="65"
+    y="51"
+    font-family="'Arial', sans-serif"
+    font-weight="400"
+    font-size="9"
+    letter-spacing="3.5"
+    fill="#6b7280"
+  >DECISIVE SIGNALS</text>
+</svg>

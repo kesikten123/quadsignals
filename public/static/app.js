@@ -110,131 +110,192 @@ async function checkAuth() {
 // ============================================================
 // LANDING PAGE
 // ============================================================
+// Inline SVG logo - transparent background, perfectly blends with dark theme
+function getLogoSVG(w, h) {
+  w = w || 200; h = h || 50;
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" width="' + w + '" height="' + h + '" fill="none">' +
+    '<defs>' +
+      '<linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">' +
+        '<stop offset="0%" stop-color="#e83a00"/>' +
+        '<stop offset="50%" stop-color="#f97316"/>' +
+        '<stop offset="100%" stop-color="#f59e0b"/>' +
+      '</linearGradient>' +
+      '<filter id="gs1" x="-30%" y="-30%" width="160%" height="160%">' +
+        '<feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#f97316" flood-opacity="0.4"/>' +
+      '</filter>' +
+    '</defs>' +
+    '<g filter="url(#gs1)">' +
+      '<rect x="2" y="4" width="52" height="52" rx="13" fill="rgba(249,115,22,0.07)" stroke="url(#lg1)" stroke-width="1.2"/>' +
+      '<rect x="14" y="38" width="6" height="10" rx="3" fill="url(#lg1)" opacity="0.55"/>' +
+      '<rect x="23" y="30" width="6" height="18" rx="3" fill="url(#lg1)" opacity="0.75"/>' +
+      '<rect x="32" y="20" width="6" height="28" rx="3" fill="url(#lg1)"/>' +
+      '<rect x="41" y="25" width="6" height="23" rx="3" fill="url(#lg1)" opacity="0.88"/>' +
+      '<path d="M44 21.5 L40.5 26.5 L47.5 26.5 Z" fill="url(#lg1)"/>' +
+      '<line x1="12" y1="49.5" x2="49" y2="49.5" stroke="rgba(249,115,22,0.3)" stroke-width="1" stroke-linecap="round"/>' +
+    '</g>' +
+    '<text x="64" y="33" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="26" letter-spacing="2" fill="url(#lg1)">QUAD</text>' +
+    '<line x1="64" y1="38" x2="218" y2="38" stroke="rgba(249,115,22,0.18)" stroke-width="0.7"/>' +
+    '<text x="65" y="51" font-family="Arial,sans-serif" font-size="9" letter-spacing="3.5" fill="#6b7280">DECISIVE SIGNALS</text>' +
+  '</svg>'
+}
+
+function getLogoIcon(sz) {
+  sz = sz || 40;
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="' + sz + '" height="' + sz + '" fill="none">' +
+    '<defs>' +
+      '<linearGradient id="li1" x1="0%" y1="0%" x2="100%" y2="100%">' +
+        '<stop offset="0%" stop-color="#e83a00"/>' +
+        '<stop offset="50%" stop-color="#f97316"/>' +
+        '<stop offset="100%" stop-color="#f59e0b"/>' +
+      '</linearGradient>' +
+      '<filter id="gi1" x="-30%" y="-30%" width="160%" height="160%">' +
+        '<feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#f97316" flood-opacity="0.45"/>' +
+      '</filter>' +
+    '</defs>' +
+    '<g filter="url(#gi1)">' +
+      '<rect x="2" y="2" width="56" height="56" rx="14" fill="rgba(249,115,22,0.07)" stroke="url(#li1)" stroke-width="1.5"/>' +
+      '<rect x="10" y="40" width="7" height="11" rx="3.5" fill="url(#li1)" opacity="0.55"/>' +
+      '<rect x="21" y="30" width="7" height="21" rx="3.5" fill="url(#li1)" opacity="0.75"/>' +
+      '<rect x="32" y="18" width="7" height="33" rx="3.5" fill="url(#li1)"/>' +
+      '<rect x="43" y="24" width="7" height="27" rx="3.5" fill="url(#li1)" opacity="0.88"/>' +
+      '<path d="M46.5 15 L42 22 L51 22 Z" fill="url(#li1)"/>' +
+      '<line x1="8" y1="53" x2="52" y2="53" stroke="rgba(249,115,22,0.3)" stroke-width="1" stroke-linecap="round"/>' +
+    '</g>' +
+  '</svg>'
+}
+
 function renderLanding() {
   const app = document.getElementById('app')
   app.innerHTML = `
-    <div style="min-height:100vh; background: linear-gradient(135deg, #080d14 0%, #0d1117 50%, #080d14 100%); position:relative; overflow:hidden;">
-      
-      <!-- Animated background particles -->
+    <div style="min-height:100vh; background:#080d14; position:relative; overflow:hidden;">
+
+      <!-- Layered background gradients -->
+      <div style="position:absolute; inset:0; pointer-events:none;
+        background:
+          radial-gradient(ellipse 80% 50% at 20% 10%, rgba(249,115,22,0.07) 0%, transparent 60%),
+          radial-gradient(ellipse 60% 40% at 80% 80%, rgba(245,158,11,0.05) 0%, transparent 55%),
+          radial-gradient(ellipse 100% 60% at 50% 50%, rgba(232,58,0,0.03) 0%, transparent 70%);
+      "></div>
+
+      <!-- Subtle grid -->
+      <div style="position:absolute; inset:0; pointer-events:none;
+        background-image:linear-gradient(rgba(249,115,22,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,0.025) 1px, transparent 1px);
+        background-size:60px 60px;
+        mask-image:radial-gradient(ellipse at center, black 40%, transparent 100%);
+        -webkit-mask-image:radial-gradient(ellipse at center, black 40%, transparent 100%);
+      "></div>
+
+      <!-- Particles -->
       <div id="particles" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;"></div>
-      
-      <!-- Background grid -->
-      <div style="position:absolute; inset:0; background-image: linear-gradient(rgba(249,115,22,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,0.03) 1px, transparent 1px); background-size: 50px 50px; pointer-events:none;"></div>
-      
-      <!-- Glow orbs -->
-      <div style="position:absolute; top:-200px; left:-200px; width:600px; height:600px; background:radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 70%); pointer-events:none;"></div>
-      <div style="position:absolute; bottom:-200px; right:-200px; width:600px; height:600px; background:radial-gradient(circle, rgba(245,158,11,0.06) 0%, transparent 70%); pointer-events:none;"></div>
+
+      <!-- Top accent line -->
+      <div style="position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.5) 30%, rgba(245,158,11,0.5) 70%, transparent 100%); pointer-events:none;"></div>
 
       <!-- Navigation -->
-      <nav style="position:relative; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:20px 60px; border-bottom:1px solid rgba(249,115,22,0.08);">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <img src="/static/logo.png" alt="QUAD" style="height:48px;" onerror="this.style.display='none'">
-          <div>
-            <div style="font-size:22px; font-weight:800; background: linear-gradient(135deg, #e83a00, #f97316, #f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
-            <div style="font-size:10px; color:#6b7280; letter-spacing:0.2em; margin-top:-2px;">DECISIVE SIGNALS</div>
+      <nav style="position:relative; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:0 60px; height:72px; background:rgba(8,13,20,0.6); backdrop-filter:blur(24px); border-bottom:1px solid rgba(249,115,22,0.1);">
+        <div style="display:flex; align-items:center;">${getLogoSVG(200,50)}</div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div style="display:flex; align-items:center; gap:6px; margin-right:8px;">
+            <div style="width:7px; height:7px; background:#22c55e; border-radius:50%; box-shadow:0 0 8px #22c55e;"></div>
+            <span style="font-size:11px; color:#22c55e; font-weight:700; letter-spacing:0.08em;">LIVE</span>
           </div>
-        </div>
-        <div style="display:flex; gap:12px;">
-          <button onclick="navigate('login')" class="btn-secondary" style="padding:10px 24px; font-size:14px;">로그인</button>
-          <button onclick="navigate('register')" class="btn-primary" style="padding:10px 24px; font-size:14px;">무료 가입</button>
+          <button onclick="navigate('login')" class="btn-secondary" style="padding:9px 22px; font-size:13px;">로그인</button>
+          <button onclick="navigate('register')" class="btn-primary" style="padding:9px 22px; font-size:13px;">무료 가입</button>
         </div>
       </nav>
 
-      <!-- Hero Section -->
-      <div style="position:relative; z-index:10; text-align:center; padding: 100px 20px 80px;">
-        
-        <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(249,115,22,0.1); border:1px solid rgba(249,115,22,0.2); border-radius:20px; padding:8px 20px; margin-bottom:32px;">
-          <div style="width:8px; height:8px; background:#22c55e; border-radius:50%; animation: glow 2s ease-in-out infinite;"></div>
-          <span style="font-size:13px; color:#f97316; font-weight:600;">실시간 주식 시그널 서비스 운영 중</span>
+      <!-- Hero -->
+      <div style="position:relative; z-index:10; text-align:center; padding:90px 20px 70px;">
+        <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.18); border-radius:24px; padding:8px 22px; margin-bottom:36px; backdrop-filter:blur(8px);">
+          <div style="width:7px; height:7px; background:#22c55e; border-radius:50%; box-shadow:0 0 8px #22c55e; animation:glow 2s ease-in-out infinite;"></div>
+          <span style="font-size:12px; color:#f97316; font-weight:600; letter-spacing:0.04em;">실시간 주식 시그널 서비스 운영 중</span>
         </div>
 
-        <h1 style="font-size: clamp(36px, 6vw, 72px); font-weight:900; line-height:1.1; margin-bottom:24px;">
-          <span style="color:white;">한국 주식 시장의</span><br>
-          <span style="background: linear-gradient(135deg, #e83a00, #f97316, #f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">결정적 시그널</span>
+        <div style="display:flex; justify-content:center; margin-bottom:32px;">${getLogoIcon(72)}</div>
+
+        <h1 style="font-size:clamp(38px,6vw,76px); font-weight:900; line-height:1.08; margin-bottom:28px; letter-spacing:-0.02em;">
+          <span style="color:rgba(255,255,255,0.92);">한국 주식 시장의</span><br>
+          <span style="background:linear-gradient(135deg,#e83a00 0%,#f97316 45%,#f59e0b 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; filter:drop-shadow(0 0 32px rgba(249,115,22,0.3));">결정적 시그널</span>
         </h1>
 
-        <p style="font-size: clamp(16px, 2vw, 20px); color:#9ca3af; max-width:600px; margin:0 auto 48px; line-height:1.7;">
+        <p style="font-size:clamp(15px,2vw,19px); color:#6b7280; max-width:560px; margin:0 auto 52px; line-height:1.8;">
           코스피·코스닥 핵심 종목의 매수/매도 시그널을 실시간으로 제공합니다.<br>
           뉴스와 연동된 관련 종목 분석으로 투자 기회를 포착하세요.
         </p>
 
-        <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
-          <button onclick="navigate('register')" class="btn-primary" style="padding:16px 40px; font-size:16px; border-radius:12px;">
-            <i class="fas fa-rocket" style="margin-right:8px;"></i>지금 시작하기
+        <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap;">
+          <button onclick="navigate('register')" class="btn-primary" style="padding:15px 40px; font-size:16px; border-radius:12px; box-shadow:0 0 32px rgba(249,115,22,0.25);">
+            <i class="fas fa-rocket" style="margin-right:9px;"></i>지금 시작하기
           </button>
-          <button onclick="navigate('login')" class="btn-secondary" style="padding:16px 40px; font-size:16px; border-radius:12px;">
-            <i class="fas fa-sign-in-alt" style="margin-right:8px;"></i>로그인
+          <button onclick="navigate('login')" class="btn-secondary" style="padding:15px 40px; font-size:16px; border-radius:12px;">
+            <i class="fas fa-sign-in-alt" style="margin-right:9px;"></i>로그인
           </button>
         </div>
       </div>
 
       <!-- Stats bar -->
-      <div style="position:relative; z-index:10; display:flex; justify-content:center; gap:60px; padding:40px 20px; border-top:1px solid rgba(249,115,22,0.08); border-bottom:1px solid rgba(249,115,22,0.08); background:rgba(8,13,20,0.5); flex-wrap:wrap;">
-        ${[
-          { num: '200+', label: '분석 종목', icon: 'fas fa-chart-bar' },
-          { num: '98.5%', label: '시그널 정확도', icon: 'fas fa-bullseye' },
-          { num: '24/7', label: '실시간 모니터링', icon: 'fas fa-satellite-dish' },
-          { num: '10K+', label: '활성 회원', icon: 'fas fa-users' },
-        ].map(s => `
-          <div style="text-align:center;">
-            <div style="color:var(--brand-orange); font-size:13px; margin-bottom:8px;"><i class="${s.icon}"></i></div>
-            <div style="font-size:32px; font-weight:900; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">${s.num}</div>
-            <div style="font-size:13px; color:#6b7280; margin-top:4px;">${s.label}</div>
+      <div style="position:relative; z-index:10; display:flex; justify-content:center; flex-wrap:wrap; border-top:1px solid rgba(249,115,22,0.08); border-bottom:1px solid rgba(249,115,22,0.08); background:rgba(10,15,26,0.6); backdrop-filter:blur(16px);">
+        ${[{num:'200+',label:'분석 종목',icon:'fas fa-chart-bar'},{num:'98.5%',label:'시그널 정확도',icon:'fas fa-bullseye'},{num:'24/7',label:'실시간 모니터링',icon:'fas fa-satellite-dish'},{num:'10K+',label:'활성 회원',icon:'fas fa-users'}].map((s,i) => `
+          <div style="text-align:center; padding:36px 56px; ${i<3?'border-right:1px solid rgba(249,115,22,0.06);':''}">
+            <div style="color:#f97316; font-size:14px; margin-bottom:10px; opacity:0.8;"><i class="${s.icon}"></i></div>
+            <div style="font-size:34px; font-weight:900; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1;">${s.num}</div>
+            <div style="font-size:12px; color:#4b5563; margin-top:8px; letter-spacing:0.04em;">${s.label}</div>
           </div>
         `).join('')}
       </div>
 
-      <!-- Features Section -->
-      <div style="position:relative; z-index:10; padding: 80px 60px; max-width:1200px; margin:0 auto;">
-        <h2 style="text-align:center; font-size:36px; font-weight:800; margin-bottom:16px;">
-          <span style="color:white;">왜 </span>
-          <span style="background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</span>
-          <span style="color:white;">인가?</span>
-        </h2>
-        <p style="text-align:center; color:#6b7280; margin-bottom:60px; font-size:16px;">전문가 수준의 투자 시그널을 누구나 쉽게</p>
-        
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:24px;">
+      <!-- Features -->
+      <div style="position:relative; z-index:10; padding:80px 60px; max-width:1200px; margin:0 auto;">
+        <div style="text-align:center; margin-bottom:60px;">
+          <h2 style="font-size:36px; font-weight:800; margin-bottom:12px;">
+            <span style="color:rgba(255,255,255,0.9);">왜 </span>
+            <span style="background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</span>
+            <span style="color:rgba(255,255,255,0.9);">인가?</span>
+          </h2>
+          <div style="width:60px; height:2px; background:linear-gradient(90deg,#f97316,#f59e0b); margin:16px auto 0; border-radius:2px;"></div>
+          <p style="color:#4b5563; margin-top:16px; font-size:15px;">전문가 수준의 투자 시그널을 누구나 쉽게</p>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
           ${[
-            { icon: '📈', title: '실시간 매수/매도 시그널', desc: '코스피·코스닥 주요 종목의 기술적·기본적 분석을 결합한 고정확도 시그널을 실시간으로 제공합니다.' },
-            { icon: '📰', title: '뉴스 종목 연동 분석', desc: '네이버 금융 뉴스와 관련 주식 종목을 자동으로 매핑하여 뉴스의 투자 영향력을 즉시 파악할 수 있습니다.' },
-            { icon: '🔒', title: '검증된 회원 전용 서비스', desc: '관리자 승인 시스템으로 신뢰할 수 있는 회원만 이용 가능한 프리미엄 서비스입니다.' },
-            { icon: '⚡', title: '시그널 강도 표시', desc: '매수/매도 신호의 강도를 0-100% 수치로 표시하여 투자 결정의 확신도를 한눈에 확인할 수 있습니다.' },
-            { icon: '🏆', title: '코스피·코스닥 전문', desc: '한국 주식 시장에 특화된 분석으로 삼성전자부터 코스닥 성장주까지 폭넓은 종목을 다룹니다.' },
-            { icon: '📊', title: '전문 대시보드', desc: '직관적인 인터페이스로 시장 전체 현황을 한눈에 파악하고 원하는 종목을 빠르게 확인하세요.' },
+            {icon:'fa-chart-line', bg:'34,197,94', color:'#22c55e', title:'실시간 매수/매도 시그널', desc:'코스피·코스닥 주요 종목의 기술적·기본적 분석을 결합한 고정확도 시그널을 실시간으로 제공합니다.'},
+            {icon:'fa-newspaper', bg:'59,130,246', color:'#3b82f6', title:'뉴스 종목 연동 분석', desc:'네이버 금융 뉴스와 관련 주식 종목을 자동으로 매핑하여 뉴스의 투자 영향력을 즉시 파악할 수 있습니다.'},
+            {icon:'fa-shield-alt', bg:'245,158,11', color:'#f59e0b', title:'검증된 회원 전용 서비스', desc:'관리자 승인 시스템으로 신뢰할 수 있는 회원만 이용 가능한 프리미엄 서비스입니다.'},
+            {icon:'fa-bolt', bg:'249,115,22', color:'#f97316', title:'시그널 강도 표시', desc:'매수/매도 신호의 강도를 0-100% 수치로 표시하여 투자 결정의 확신도를 한눈에 확인할 수 있습니다.'},
+            {icon:'fa-trophy', bg:'167,139,250', color:'#a78bfa', title:'코스피·코스닥 전문', desc:'한국 주식 시장에 특화된 분석으로 삼성전자부터 코스닥 성장주까지 폭넓은 종목을 다룹니다.'},
+            {icon:'fa-tachometer-alt', bg:'52,211,153', color:'#34d399', title:'전문 대시보드', desc:'직관적인 인터페이스로 시장 전체 현황을 한눈에 파악하고 원하는 종목을 빠르게 확인하세요.'},
           ].map(f => `
-            <div class="glass-card" style="padding:28px;">
-              <div style="font-size:40px; margin-bottom:16px;">${f.icon}</div>
-              <h3 style="font-size:18px; font-weight:700; color:white; margin-bottom:10px;">${f.title}</h3>
-              <p style="font-size:14px; color:#6b7280; line-height:1.7;">${f.desc}</p>
+            <div style="background:rgba(15,20,30,0.7); border:1px solid rgba(249,115,22,0.08); border-radius:16px; padding:28px; backdrop-filter:blur(12px); transition:all 0.25s; cursor:default;"
+              onmouseover="this.style.borderColor='rgba(249,115,22,0.22)'; this.style.transform='translateY(-3px)'; this.style.boxShadow='0 12px 40px rgba(249,115,22,0.1)';"
+              onmouseout="this.style.borderColor='rgba(249,115,22,0.08)'; this.style.transform=''; this.style.boxShadow='';">
+              <div style="width:46px; height:46px; background:rgba(${f.bg},0.12); border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:18px;">
+                <i class="fas ${f.icon}" style="color:${f.color}; font-size:18px;"></i>
+              </div>
+              <h3 style="font-size:16px; font-weight:700; color:rgba(255,255,255,0.9); margin-bottom:10px;">${f.title}</h3>
+              <p style="font-size:13px; color:#4b5563; line-height:1.75;">${f.desc}</p>
             </div>
           `).join('')}
         </div>
       </div>
 
-      <!-- CTA Section -->
-      <div style="position:relative; z-index:10; text-align:center; padding: 80px 20px; background: rgba(249,115,22,0.03);">
-        <h2 style="font-size:40px; font-weight:900; color:white; margin-bottom:16px;">지금 바로 시작하세요</h2>
-        <p style="color:#9ca3af; font-size:16px; margin-bottom:40px;">회원가입 후 관리자 승인을 받으면 모든 서비스를 이용할 수 있습니다.</p>
-        <button onclick="navigate('register')" class="btn-primary" style="padding:18px 56px; font-size:18px; border-radius:14px;">
+      <!-- CTA -->
+      <div style="position:relative; z-index:10; text-align:center; padding:80px 20px; background:linear-gradient(180deg,transparent 0%,rgba(249,115,22,0.04) 50%,transparent 100%); border-top:1px solid rgba(249,115,22,0.06); border-bottom:1px solid rgba(249,115,22,0.06);">
+        <div style="display:flex; justify-content:center; margin-bottom:24px;">${getLogoIcon(52)}</div>
+        <h2 style="font-size:38px; font-weight:900; color:rgba(255,255,255,0.92); margin-bottom:14px;">지금 바로 시작하세요</h2>
+        <p style="color:#4b5563; font-size:15px; margin-bottom:40px;">회원가입 후 관리자 승인을 받으면 모든 서비스를 이용할 수 있습니다.</p>
+        <button onclick="navigate('register')" class="btn-primary" style="padding:16px 56px; font-size:17px; border-radius:14px; box-shadow:0 0 48px rgba(249,115,22,0.3);">
           <i class="fas fa-user-plus" style="margin-right:10px;"></i>무료 회원가입
         </button>
       </div>
 
       <!-- Footer -->
-      <footer style="position:relative; z-index:10; padding:40px 60px; border-top:1px solid rgba(249,115,22,0.08); text-align:center;">
-        <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:16px;">
-          <img src="/static/logo.png" alt="QUAD" style="height:32px;" onerror="this.style.display='none'">
-          <span style="font-weight:700; font-size:16px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD DECISIVE SIGNALS</span>
-        </div>
-        <p style="color:#374151; font-size:13px;">© 2024 QUAD Decisive Signals. 본 서비스는 투자 참고용이며, 투자 결정에 대한 책임은 투자자 본인에게 있습니다.</p>
+      <footer style="position:relative; z-index:10; padding:36px 60px; text-align:center; border-top:1px solid rgba(249,115,22,0.06);">
+        <div style="display:flex; align-items:center; justify-content:center; margin-bottom:14px;">${getLogoSVG(180,44)}</div>
+        <p style="color:#2d3748; font-size:12px; margin-top:4px;">© 2024 QUAD Decisive Signals. 본 서비스는 투자 참고용이며, 투자 결정에 대한 책임은 투자자 본인에게 있습니다.</p>
       </footer>
     </div>
   `
-  
-  // Create particles
   createParticles()
 }
-
 function createParticles() {
   const container = document.getElementById('particles')
   if (!container) return
@@ -269,9 +330,7 @@ function renderLogin() {
         
         <!-- Logo -->
         <div style="text-align:center; margin-bottom:40px;">
-          <img src="/static/logo.png" alt="QUAD" style="height:72px; margin-bottom:16px;" onerror="this.style.display='none'">
-          <h1 style="font-size:28px; font-weight:900; background:linear-gradient(135deg,#e83a00,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</h1>
-          <p style="color:#6b7280; font-size:12px; letter-spacing:0.2em; margin-top:4px;">DECISIVE SIGNALS</p>
+          ${getLogoIcon(64)}
         </div>
 
         <!-- Card -->
@@ -373,9 +432,7 @@ function renderRegister() {
       <div style="position:relative; z-index:10; width:100%; max-width:480px;">
         
         <div style="text-align:center; margin-bottom:32px;">
-          <img src="/static/logo.png" alt="QUAD" style="height:60px; margin-bottom:12px;" onerror="this.style.display='none'">
-          <h1 style="font-size:24px; font-weight:900; background:linear-gradient(135deg,#e83a00,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</h1>
-          <p style="color:#6b7280; font-size:11px; letter-spacing:0.2em;">DECISIVE SIGNALS</p>
+          ${getLogoIcon(56)}
         </div>
 
         <div style="background:rgba(22,27,34,0.9); border:1px solid rgba(249,115,22,0.15); border-radius:20px; padding:36px; backdrop-filter:blur(20px);">
@@ -518,11 +575,7 @@ function renderUserLayout(page, params) {
           onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='none'">
           <i class="fas fa-bars"></i>
         </button>
-        <img src="/static/logo.png" alt="QUAD" style="height:38px;" onerror="this.style.display='none'">
-        <div style="line-height:1;">
-          <div style="font-weight:800; font-size:17px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
-          <div style="font-size:9px; color:#4b5563; letter-spacing:0.15em; margin-top:1px;">DECISIVE SIGNALS</div>
-        </div>
+        ${getLogoSVG(160,40)}
       </div>
       <div style="display:flex; align-items:center; gap:14px;">
         <div style="display:flex; align-items:center; gap:6px;">
@@ -1627,10 +1680,10 @@ function renderAdminLayout(page, params) {
           onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='none'">
           <i class="fas fa-bars"></i>
         </button>
-        <img src="/static/logo.png" alt="QUAD" style="height:38px;" onerror="this.style.display='none'">
-        <div style="line-height:1;">
-          <div style="font-weight:800; font-size:17px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
-          <div style="font-size:9px; color:#4b5563; letter-spacing:0.15em; margin-top:1px;">ADMIN PANEL</div>
+        ${getLogoIcon(36)}
+        <div style="line-height:1; margin-left:6px;">
+          <div style="font-weight:800; font-size:16px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
+          <div style="font-size:9px; color:#4b5563; letter-spacing:0.12em; margin-top:1px;">ADMIN PANEL</div>
         </div>
         <span style="background:linear-gradient(135deg,#e83a00,#f59e0b); color:white; padding:3px 10px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:0.05em;">ADMIN</span>
       </div>
