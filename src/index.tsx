@@ -40,6 +40,40 @@ app.route('/api/recommend', recommendRoutes)
 // Health check
 app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
+// DB Init - 초기 계정 설정 (1회용)
+app.get('/api/init-db', async (c) => {
+  try {
+    const { hashPassword } = await import('./lib/utils')
+    const adminHash = await hashPassword('Admin1234!')
+    const testHash = await hashPassword('Test1234!')
+
+    await c.env.DB.prepare(
+      `UPDATE users SET password_hash = ?, role = 'admin', status = 'approved' WHERE username = 'admin'`
+    ).bind(adminHash).run()
+
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM users WHERE username = 'testuser'`
+    ).first()
+
+    if (!existing) {
+      await c.env.DB.prepare(
+        `INSERT INTO users (username, password_hash, name, phone, email, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind('testuser', testHash, '테스트유저', '010-1234-5678', 'test@test.com', 'user', 'approved').run()
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE users SET password_hash = ?, status = 'approved' WHERE username = 'testuser'`
+      ).bind(testHash).run()
+    }
+
+    return c.json({ success: true, message: '계정 초기화 완료', accounts: [
+      { username: 'admin', password: 'Admin1234!', role: 'admin' },
+      { username: 'testuser', password: 'Test1234!', role: 'user' }
+    ]})
+  } catch (e: any) {
+    return c.json({ success: false, error: e.message }, 500)
+  }
+})
+
 // SPA fallback - /api/* 는 절대 fallback 타지 않도록 먼저 404 처리
 app.all('/api/*', (c) => c.json({ success: false, message: 'API endpoint not found' }, 404))
 

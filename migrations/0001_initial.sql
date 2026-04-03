@@ -49,9 +49,13 @@ CREATE TABLE IF NOT EXISTS news_cache (
   cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create admin user (password: Admin@1234)
+-- Create admin user (password: Admin1234!)
 INSERT OR IGNORE INTO users (username, password_hash, name, phone, email, role, status)
-VALUES ('admin', '$2a$10$admin_hash_placeholder', 'Administrator', '010-0000-0000', 'admin@quadsignals.com', 'admin', 'approved');
+VALUES ('admin', 'M4CEOg+iqTSzr5aDX5+R7n8V2jw7bNRAi8Tkzxmfbto=', 'Administrator', '010-0000-0000', 'admin@quadsignals.com', 'admin', 'approved');
+
+-- Create test user (password: Test1234!)
+INSERT OR IGNORE INTO users (username, password_hash, name, phone, email, role, status)
+VALUES ('testuser', 'raWzzVfMK14lLV9YDhs75bK7z0MlroKHg3/dwnlocV0=', '테스트유저', '010-1234-5678', 'test@test.com', 'user', 'approved');
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
