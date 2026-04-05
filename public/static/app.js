@@ -1169,6 +1169,7 @@ async function renderNews() {
   if (!content) return
 
   if (newsRefreshTimer) { clearInterval(newsRefreshTimer); newsRefreshTimer = null }
+  if (newsTimeUpdateTimer) { clearInterval(newsTimeUpdateTimer); newsTimeUpdateTimer = null }
 
   content.innerHTML = `
     <!-- 헤더 -->
@@ -1281,8 +1282,12 @@ async function renderNews() {
   applyNewsLayout()
   window.addEventListener('resize', applyNewsLayout)
 
+  // 초기 카테고리 상태 초기화
+  window._currentNewsCategory = 'all'
+  window._currentNewsQuery = '주식 코스피 코스닥 증시'
+
   await Promise.all([
-    loadNewsList('주식 코스피 코스닥'),
+    loadNewsList('주식 코스피 코스닥 증시', false, 'all'),
     loadRecommendPanel()
   ])
 
@@ -1294,9 +1299,10 @@ async function renderNews() {
 
     if (newsCountdown <= 0) {
       newsCountdown = 30
-      const query = window._currentNewsQuery || '주식 코스피 코스닥'
+      const query    = window._currentNewsQuery    || '주식 코스피 코스닥 증시'
+      const category = window._currentNewsCategory || 'all'
       await Promise.all([
-        loadNewsList(query, true),
+        loadNewsList(query, true, category),
         loadRecommendPanel(true)
       ])
       const lu = document.getElementById('last-updated')
@@ -1328,25 +1334,39 @@ function applyNewsLayout() {
 window._currentNewsQuery = '주식 코스피 코스닥'
 window._currentNewsTab   = 'all'
 
+// 탭별 API 쿼리 및 카테고리 매핑
+const NEWS_TAB_CONFIG = {
+  all:    { query: '주식 코스피 코스닥 증시',        category: 'all'   },
+  kospi:  { query: 'KOSPI 코스피 주식',             category: 'kospi' },
+  kosdaq: { query: 'KOSDAQ 코스닥 주식',            category: 'kosdaq'},
+  bio:    { query: '바이오 제약 신약 임상 의료',     category: 'bio'   },
+  semi:   { query: '반도체 AI HBM 파운드리',        category: 'semi'  },
+  bat:    { query: '2차전지 배터리 전기차 이차전지', category: 'bat'   },
+  robot:  { query: '로봇 AI로봇 협동로봇 자동화',   category: 'robot' },
+}
+
 async function switchNewsTab(tab, query) {
   ;['all','kospi','kosdaq','bio','semi','bat','robot'].forEach(t => {
     const el = document.getElementById(`ntab-${t}`)
     if (el) el.classList.toggle('active', t === tab)
   })
   window._currentNewsTab   = tab
-  window._currentNewsQuery = query
-  await loadNewsList(query)
+  const config = NEWS_TAB_CONFIG[tab] || NEWS_TAB_CONFIG.all
+  window._currentNewsQuery = config.query
+  window._currentNewsCategory = config.category
+  await loadNewsList(config.query, false, config.category)
 }
 
 async function searchNews() {
   const q = (document.getElementById('news-search')?.value || '').trim()
   if (!q) return
   window._currentNewsQuery = q
+  window._currentNewsCategory = 'all'
   ;['all','kospi','kosdaq','bio','semi','bat','robot'].forEach(t => {
     const el = document.getElementById(`ntab-${t}`)
     if (el) el.classList.remove('active')
   })
-  await loadNewsList(q)
+  await loadNewsList(q, false, 'all')
 }
 
 async function manualRefreshNews() {
@@ -1354,13 +1374,14 @@ async function manualRefreshNews() {
   const el = document.getElementById('refresh-countdown')
   if (el) el.textContent = '30초'
   const query = window._currentNewsQuery || '주식 코스피 코스닥'
+  const category = window._currentNewsCategory || 'all'
   await Promise.all([
-    loadNewsList(query),
+    loadNewsList(query, false, category),
     loadRecommendPanel()
   ])
 }
 
-async function loadNewsList(query = '주식 코스피 코스닥', silent = false) {
+async function loadNewsList(query = '주식 코스피 코스닥', silent = false, category = 'all') {
   const list = document.getElementById('news-list')
   if (!list) return
 
@@ -1369,12 +1390,12 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
   }
 
   try {
-    const res = await api.get(`/news?query=${encodeURIComponent(query)}&display=20`)
+    const res = await api.get(`/news?query=${encodeURIComponent(query)}&display=25&category=${encodeURIComponent(category)}`)
     const news   = res.success ? res.news : []
     const isMock = res.isMock
 
+    // 관련 종목 코드 추출 후 시그널 정보 가져오기
     const allCodes = [...new Set(news.flatMap(n => (n.relatedStocks || []).map(s => s.code)))]
-
     let stockSigMap = {}
     if (allCodes.length > 0) {
       try {
@@ -1388,10 +1409,14 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
     const newsSource = res.source || (isMock ? 'mock' : 'google')
     const sourceLabel = newsSource === 'naver' ? '네이버 뉴스' : newsSource === 'google' ? 'Google 뉴스' : '샘플 데이터'
     const sourceColor = newsSource === 'naver' ? '#03c75a' : newsSource === 'google' ? '#4285f4' : '#f59e0b'
-    const sourceBg = newsSource === 'naver' ? 'rgba(3,199,90,0.08)' : newsSource === 'google' ? 'rgba(66,133,244,0.08)' : 'rgba(245,158,11,0.07)'
-    const sourceBorder = newsSource === 'naver' ? 'rgba(3,199,90,0.2)' : newsSource === 'google' ? 'rgba(66,133,244,0.2)' : 'rgba(245,158,11,0.18)'
-    const sourceIcon = newsSource === 'naver' ? 'fa-n' : newsSource === 'google' ? 'fa-google' : 'fa-satellite-dish'
-    const sourceDesc = newsSource === 'google' ? 'Google 뉴스 RSS 실시간' : newsSource === 'naver' ? '네이버 Open API 연동' : '샘플 데이터'
+    const sourceBg    = newsSource === 'naver' ? 'rgba(3,199,90,0.08)' : newsSource === 'google' ? 'rgba(66,133,244,0.08)' : 'rgba(245,158,11,0.07)'
+    const sourceBorder= newsSource === 'naver' ? 'rgba(3,199,90,0.2)'  : newsSource === 'google' ? 'rgba(66,133,244,0.2)'  : 'rgba(245,158,11,0.18)'
+    const sourceIcon  = newsSource === 'naver' ? 'fa-n' : newsSource === 'google' ? 'fa-google' : 'fa-satellite-dish'
+    const sourceDesc  = newsSource === 'google' ? 'Google 뉴스 RSS 실시간' : newsSource === 'naver' ? '네이버 Open API 연동' : '샘플 데이터'
+
+    // 현재 탭 레이블
+    const tabLabels = { all:'전체', kospi:'KOSPI', kosdaq:'KOSDAQ', bio:'바이오', semi:'반도체·AI', bat:'2차전지', robot:'로봇' }
+    const tabLabel = tabLabels[category] || '전체'
 
     list.innerHTML = `
       <!-- 뉴스 소스 배너 -->
@@ -1400,6 +1425,7 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
           <i class="fab ${sourceIcon}" style="color:${sourceColor}; font-size:13px;"></i>
           <span style="font-size:12px; color:${sourceColor}; font-weight:600;">${sourceLabel}</span>
           <span style="font-size:11px; color:#6b7280;">${sourceDesc}</span>
+          ${category !== 'all' ? `<span style="font-size:10px; color:#9ca3af; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:4px; padding:1px 6px;">${tabLabel} 필터</span>` : ''}
         </div>
         <span style="font-size:11px; color:#4b5563; white-space:nowrap;">${news.length}건</span>
       </div>
@@ -1409,50 +1435,75 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
           const stocks = n.relatedStocks || []
           const enrichedStocks = stocks.map(s => stockSigMap[s.code] ? { ...s, ...stockSigMap[s.code] } : s)
           const newsLink = (n.link || '').replace(/'/g, '%27')
+          const timeAgo = formatDate(n.pubDate)
+
+          // 뉴스 카테고리 배지 (최대 2개)
+          const cats = n.categories || []
+          const catBadgeMap = { kospi:'KOSPI', kosdaq:'KOSDAQ', bio:'바이오', semi:'반도체', bat:'2차전지', robot:'로봇' }
+          const catColors   = { kospi:'#60a5fa', kosdaq:'#c084fc', bio:'#34d399', semi:'#fb923c', bat:'#facc15', robot:'#38bdf8' }
+          const catBadges   = cats.slice(0,2).map(c => catBadgeMap[c] ? `<span style="font-size:9px; font-weight:700; color:${catColors[c]||'#9ca3af'}; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:4px; padding:1px 5px;">${catBadgeMap[c]}</span>` : '').join('')
 
           return `
-          <div class="news-card" style="animation:fadeInUp 0.4s ease both; animation-delay:${idx * 0.04}s;"
+          <div class="news-card" style="animation:fadeInUp 0.3s ease both; animation-delay:${Math.min(idx * 0.03, 0.5)}s;"
             onclick="openNewsLink('${newsLink}')">
 
-            <!-- 출처 + 시각 -->
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:6px;">
-              <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-                ${n.source ? `<span style="font-size:10px; font-weight:600; color:${sourceColor}; background:${sourceBg}; border:1px solid ${sourceBorder}; border-radius:4px; padding:1px 6px;">${n.source}</span>` : ''}
+            <!-- 출처 + 카테고리 배지 + 시각 -->
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; gap:6px;">
+              <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap; flex:1; min-width:0;">
+                ${n.source ? `<span style="font-size:10px; font-weight:600; color:${sourceColor}; background:${sourceBg}; border:1px solid ${sourceBorder}; border-radius:4px; padding:1px 6px; white-space:nowrap;">${n.source}</span>` : ''}
                 ${idx < 3 ? `<span style="font-size:9px; font-weight:700; color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:4px; padding:1px 5px;">NEW</span>` : ''}
+                ${catBadges}
               </div>
-              <span style="font-size:11px; color:#374151; white-space:nowrap; flex-shrink:0;">
-                ${formatDate(n.pubDate)}
+              <!-- 몇 분 전 표시 (data-pubdate 속성으로 실시간 갱신) -->
+              <span data-pubdate="${n.pubDate}" style="font-size:11px; color:#6b7280; white-space:nowrap; flex-shrink:0; display:flex; align-items:center; gap:3px;">
+                <i class="fas fa-clock" style="font-size:9px; color:#4b5563;"></i>
+                ${timeAgo}
               </span>
             </div>
 
             <!-- 제목 -->
             <h3 style="font-size:14px; font-weight:700; color:white; line-height:1.5; margin-bottom:8px;">${n.title}</h3>
 
-            <!-- 본문 요약 (제목과 다를 때만) -->
+            <!-- 본문 요약 -->
             ${n.description && n.description !== n.title ? `
             <p style="font-size:12px; color:#6b7280; line-height:1.6; margin-bottom:10px;
               display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
               ${n.description}
             </p>` : ''}
 
-            <!-- 관련 종목 -->
-            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+            <!-- 관련 종목 + 시그널 자동 추천 -->
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-top:4px;">
               <div style="display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0;">
                 ${enrichedStocks.length > 0 ? enrichedStocks.map(s => {
                   const sig    = s.signal || 'HOLD'
+                  const str    = s.strength || 0
                   const sigCol = sig === 'BUY' ? '#22c55e' : sig === 'SELL' ? '#ef4444' : '#f59e0b'
                   const sigBg  = sig === 'BUY' ? 'rgba(34,197,94,0.08)' : sig === 'SELL' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)'
-                  const sigBd  = sig === 'BUY' ? 'rgba(34,197,94,0.2)' : sig === 'SELL' ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'
+                  const sigBd  = sig === 'BUY' ? 'rgba(34,197,94,0.25)' : sig === 'SELL' ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'
+                  const mktCol = s.market === 'KOSPI' ? '#60a5fa' : '#c084fc'
+                  const chgStr = s.changeRate !== undefined ? `${s.changeRate >= 0 ? '▲' : '▼'}${Math.abs(s.changeRate).toFixed(1)}%` : ''
+                  const chgCol = s.changeRate !== undefined ? (s.changeRate >= 0 ? '#ef4444' : '#3b82f6') : '#9ca3af'
                   return `
                     <div onclick="event.stopPropagation(); showStockDetail('${s.code}','${s.name}')"
-                      style="display:flex; align-items:center; gap:4px;
-                        background:${sigBg}; border:1px solid ${sigBd};
-                        border-radius:16px; padding:4px 9px; cursor:pointer; min-height:30px;">
-                      <span style="font-size:11px; font-weight:700; color:white;">${s.name}</span>
-                      <span style="font-size:10px; font-weight:700; color:${sigCol};">${sig}</span>
+                      style="display:flex; align-items:center; gap:5px; background:${sigBg}; border:1px solid ${sigBd};
+                        border-radius:18px; padding:5px 10px; cursor:pointer; min-height:32px; transition:all 0.15s;">
+                      <div style="display:flex; flex-direction:column; line-height:1.2;">
+                        <span style="font-size:12px; font-weight:700; color:white;">${s.name}</span>
+                        <div style="display:flex; gap:4px; align-items:center;">
+                          <span style="font-size:9px; color:${mktCol};">${s.market||''}</span>
+                          ${chgStr ? `<span style="font-size:9px; color:${chgCol}; font-weight:600;">${chgStr}</span>` : ''}
+                        </div>
+                      </div>
+                      <div style="display:flex; flex-direction:column; align-items:center; gap:1px; border-left:1px solid rgba(255,255,255,0.08); padding-left:6px;">
+                        <span style="font-size:10px; font-weight:800; color:${sigCol};">${sig}</span>
+                        ${str > 0 ? `<span style="font-size:9px; color:#6b7280;">${str}%</span>` : ''}
+                      </div>
                     </div>
                   `
-                }).join('') : `<span style="font-size:11px; color:#374151;">관련 종목 없음</span>`}
+                }).join('') : `
+                  <span style="font-size:11px; color:#374151; display:flex; align-items:center; gap:4px;">
+                    <i class="fas fa-search" style="font-size:10px;"></i>관련 종목 없음
+                  </span>`}
               </div>
               <span style="font-size:11px; color:var(--brand-orange); white-space:nowrap; flex-shrink:0;">
                 <i class="fas fa-external-link-alt" style="margin-right:2px;"></i>원문
@@ -1466,13 +1517,17 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
       ${news.length === 0 ? `
         <div style="text-align:center; color:#4b5563; padding:60px;">
           <i class="fas fa-newspaper" style="font-size:36px; display:block; margin-bottom:14px; color:#374151;"></i>
-          뉴스를 불러올 수 없습니다
+          <div style="font-size:15px; font-weight:600; color:#6b7280; margin-bottom:6px;">${tabLabel} 관련 뉴스가 없습니다</div>
+          <div style="font-size:12px; color:#374151;">다른 탭을 선택하거나 검색어를 입력해보세요</div>
         </div>
       ` : ''}
     `
 
     const lu = document.getElementById('last-updated')
     if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')} · ${sourceLabel}`
+
+    // 시간 실시간 업데이트 시작
+    startNewsTimeUpdater()
 
   } catch (err) {
     list.innerHTML = '<div style="color:#ef4444; padding:20px; text-align:center;">뉴스 로드 실패 — 잠시 후 자동 재시도합니다</div>'
@@ -1601,11 +1656,27 @@ function formatDate(dateStr) {
     const d   = new Date(dateStr)
     const now = new Date()
     const diff = now - d
+    if (isNaN(diff)) return ''
+    if (diff < 0)         return '방금 전'
     if (diff < 60000)     return '방금 전'
-    if (diff < 3600000)   return Math.floor(diff / 60000)   + '분 전'
+    if (diff < 3600000)   return Math.floor(diff / 60000) + '분 전'
     if (diff < 86400000)  return Math.floor(diff / 3600000) + '시간 전'
+    if (diff < 604800000) return Math.floor(diff / 86400000) + '일 전'
     return d.toLocaleDateString('ko-KR', { month:'numeric', day:'numeric' })
   } catch { return '' }
+}
+
+// 뉴스 카드의 시간 표시를 실시간으로 업데이트하는 함수
+let newsTimeUpdateTimer = null
+function startNewsTimeUpdater() {
+  if (newsTimeUpdateTimer) clearInterval(newsTimeUpdateTimer)
+  newsTimeUpdateTimer = setInterval(() => {
+    const timeEls = document.querySelectorAll('[data-pubdate]')
+    timeEls.forEach(el => {
+      const dateStr = el.getAttribute('data-pubdate')
+      if (dateStr) el.textContent = formatDate(dateStr)
+    })
+  }, 30000) // 30초마다 업데이트
 }
 
 
