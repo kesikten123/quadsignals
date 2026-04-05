@@ -1203,7 +1203,7 @@ async function renderNews() {
           실시간 뉴스 &amp; 종목 추천
         </h1>
         <p style="color:#6b7280; font-size:13px; margin-top:6px;">
-          최신 금융 뉴스와 뉴스 기반 관련 종목 추천을 실시간으로 제공합니다
+          Google 뉴스 RSS 실시간 연동 · 뉴스 기반 관련 종목 자동 매핑
         </p>
       </div>
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -1387,30 +1387,50 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
       } catch(_) {}
     }
 
+    // 뉴스 소스 결정 (res에 source 필드 사용)
+    const newsSource = res.source || (isMock ? 'mock' : 'google')
+    const sourceLabel = newsSource === 'naver' ? '네이버 뉴스' : newsSource === 'google' ? 'Google 뉴스' : '샘플 데이터'
+    const sourceColor = newsSource === 'naver' ? '#03c75a' : newsSource === 'google' ? '#4285f4' : '#f59e0b'
+    const sourceBg = newsSource === 'naver' ? 'rgba(3,199,90,0.08)' : newsSource === 'google' ? 'rgba(66,133,244,0.08)' : 'rgba(245,158,11,0.07)'
+    const sourceBorder = newsSource === 'naver' ? 'rgba(3,199,90,0.2)' : newsSource === 'google' ? 'rgba(66,133,244,0.2)' : 'rgba(245,158,11,0.18)'
+    const sourceIcon = newsSource === 'naver' ? 'fa-n' : newsSource === 'google' ? 'fa-google' : 'fa-satellite-dish'
+    const sourceDesc = newsSource === 'naver' ? '네이버 뉴스 Open API 실시간 연동 중' : newsSource === 'google' ? 'Google 뉴스 RSS 실시간 연동 중 — 최신 금융·주식 뉴스' : '뉴스 소스 연결 실패 — 샘플 데이터 표시 중'
+
     list.innerHTML = `
-      ${isMock ? `
-        <div style="background:rgba(245,158,11,0.07); border:1px solid rgba(245,158,11,0.18); border-radius:10px; padding:11px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
-          <i class="fas fa-satellite-dish" style="color:#f59e0b; font-size:13px;"></i>
-          <span style="font-size:12px; color:#d97706;">네이버 뉴스 API 미설정 — 샘플 뉴스 데이터 표시 중</span>
+      <!-- 뉴스 소스 상태 배너 -->
+      <div style="background:${sourceBg}; border:1px solid ${sourceBorder}; border-radius:10px; padding:10px 16px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i class="fab ${sourceIcon}" style="color:${sourceColor}; font-size:14px;"></i>
+          <span style="font-size:12px; color:${sourceColor}; font-weight:600;">${sourceLabel}</span>
+          <span style="font-size:11px; color:#6b7280;">${sourceDesc}</span>
         </div>
-      ` : ''}
+        <span style="font-size:11px; color:#4b5563; white-space:nowrap;">${news.length}건</span>
+      </div>
 
       <div style="display:flex; flex-direction:column; gap:12px;">
         ${news.map((n, idx) => {
           const stocks = n.relatedStocks || []
           const enrichedStocks = stocks.map(s => stockSigMap[s.code] ? { ...s, ...stockSigMap[s.code] } : s)
+          const newsTitle = (n.title || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;')
+          const newsLink = (n.link || '').replace(/'/g, '%27')
 
           return `
-          <div class="news-card" style="padding:18px 20px; animation:fadeInUp 0.4s ease both; animation-delay:${idx * 0.04}s;"
-            onclick="openNewsLink('${n.link}')">
+          <div class="news-card" style="padding:18px 20px; animation:fadeInUp 0.4s ease both; animation-delay:${idx * 0.04}s; cursor:pointer;"
+            onclick="openNewsLink('${newsLink}')">
 
-            <!-- 제목 + 시각 -->
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:8px;">
-              <h3 style="font-size:14px; font-weight:700; color:white; line-height:1.5; flex:1;">${n.title}</h3>
-              <span style="font-size:11px; color:#374151; white-space:nowrap; margin-top:2px; flex-shrink:0;">
+            <!-- 출처 + 시각 -->
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; gap:8px;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                ${n.source ? `<span style="font-size:10px; font-weight:600; color:${sourceColor}; background:${sourceBg}; border:1px solid ${sourceBorder}; border-radius:4px; padding:1px 7px;">${n.source}</span>` : ''}
+                ${idx < 3 ? `<span style="font-size:9px; font-weight:700; color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:4px; padding:1px 6px;">NEW</span>` : ''}
+              </div>
+              <span style="font-size:11px; color:#374151; white-space:nowrap; flex-shrink:0;">
                 <i class="fas fa-clock" style="margin-right:3px;"></i>${formatDate(n.pubDate)}
               </span>
             </div>
+
+            <!-- 제목 -->
+            <h3 style="font-size:14px; font-weight:700; color:white; line-height:1.55; margin-bottom:8px;">${n.title}</h3>
 
             <!-- 본문 요약 -->
             <p style="font-size:12px; color:#6b7280; line-height:1.6; margin-bottom:12px;
@@ -1460,7 +1480,7 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
 
     // 갱신 시각 업데이트
     const lu = document.getElementById('last-updated')
-    if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')}`
+    if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')} · ${sourceLabel}`
 
   } catch (err) {
     list.innerHTML = '<div style="color:#ef4444; padding:20px; text-align:center;">뉴스 로드 실패 — 잠시 후 자동 재시도합니다</div>'
