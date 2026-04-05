@@ -110,56 +110,69 @@ async function checkAuth() {
 // ============================================================
 // LANDING PAGE
 // ============================================================
-// Inline SVG logo - transparent background, perfectly blends with dark theme
+// New logo: Q+arrow icon (white/ice-blue) + QUAD (white) + DECISIVE SIGNALS (gold)
+
+// 가로형 로고 (네비게이션/푸터용)
 function getLogoSVG(w, h) {
   w = w || 200; h = h || 50;
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" width="' + w + '" height="' + h + '" fill="none">' +
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 60" width="' + w + '" height="' + h + '" fill="none">' +
     '<defs>' +
       '<linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">' +
-        '<stop offset="0%" stop-color="#e83a00"/>' +
-        '<stop offset="50%" stop-color="#f97316"/>' +
-        '<stop offset="100%" stop-color="#f59e0b"/>' +
+        '<stop offset="0%" stop-color="#e0eaff"/>' +
+        '<stop offset="50%" stop-color="#ffffff"/>' +
+        '<stop offset="100%" stop-color="#b8d0ff"/>' +
       '</linearGradient>' +
-      '<filter id="gs1" x="-30%" y="-30%" width="160%" height="160%">' +
-        '<feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#f97316" flood-opacity="0.4"/>' +
+      '<linearGradient id="lg2" x1="0%" y1="0%" x2="100%" y2="0%">' +
+        '<stop offset="0%" stop-color="#f5c842"/>' +
+        '<stop offset="100%" stop-color="#ffd966"/>' +
+      '</linearGradient>' +
+      '<filter id="gs1" x="-40%" y="-40%" width="180%" height="180%">' +
+        '<feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#4a7fff" flood-opacity="0.5"/>' +
       '</filter>' +
     '</defs>' +
-    '<g filter="url(#gs1)">' +
-      '<rect x="2" y="4" width="52" height="52" rx="13" fill="rgba(249,115,22,0.07)" stroke="url(#lg1)" stroke-width="1.2"/>' +
-      '<rect x="14" y="38" width="6" height="10" rx="3" fill="url(#lg1)" opacity="0.55"/>' +
-      '<rect x="23" y="30" width="6" height="18" rx="3" fill="url(#lg1)" opacity="0.75"/>' +
-      '<rect x="32" y="20" width="6" height="28" rx="3" fill="url(#lg1)"/>' +
-      '<rect x="41" y="25" width="6" height="23" rx="3" fill="url(#lg1)" opacity="0.88"/>' +
-      '<path d="M44 21.5 L40.5 26.5 L47.5 26.5 Z" fill="url(#lg1)"/>' +
-      '<line x1="12" y1="49.5" x2="49" y2="49.5" stroke="rgba(249,115,22,0.3)" stroke-width="1" stroke-linecap="round"/>' +
+    // Q 아이콘 (외부 원 + Q몸체 + 상승화살표)
+    '<g filter="url(#gs1)" transform="translate(2,4)">' +
+      // 외부 원 링
+      '<circle cx="26" cy="26" r="24" stroke="url(#lg1)" stroke-width="2.2" fill="none"/>' +
+      // Q 몸체 (내부 원)
+      '<circle cx="26" cy="25" r="11" stroke="url(#lg1)" stroke-width="3.5" fill="none"/>' +
+      // Q 꼬리 (오른쪽 아래)
+      '<line x1="33" y1="32" x2="38" y2="38" stroke="url(#lg1)" stroke-width="3.5" stroke-linecap="round"/>' +
+      // 상승 화살표 (오른쪽 위에서 대각선 방향)
+      '<line x1="33" y1="14" x2="44" y2="5" stroke="url(#lg1)" stroke-width="2.5" stroke-linecap="round"/>' +
+      '<polyline points="37,5 44,5 44,12" stroke="url(#lg1)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
     '</g>' +
-    '<text x="64" y="33" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="26" letter-spacing="2" fill="url(#lg1)">QUAD</text>' +
-    '<line x1="64" y1="38" x2="218" y2="38" stroke="rgba(249,115,22,0.18)" stroke-width="0.7"/>' +
-    '<text x="65" y="51" font-family="Arial,sans-serif" font-size="9" letter-spacing="3.5" fill="#6b7280">DECISIVE SIGNALS</text>' +
+    // QUAD 텍스트
+    '<text x="66" y="34" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" letter-spacing="2.5" fill="url(#lg1)">QUAD</text>' +
+    // DECISIVE SIGNALS 텍스트
+    '<text x="67" y="50" font-family="Arial,sans-serif" font-weight="700" font-size="10" letter-spacing="3" fill="url(#lg2)">DECISIVE SIGNALS</text>' +
   '</svg>'
 }
 
+// 아이콘만 (히어로/CTA용)
 function getLogoIcon(sz) {
   sz = sz || 40;
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="' + sz + '" height="' + sz + '" fill="none">' +
     '<defs>' +
       '<linearGradient id="li1" x1="0%" y1="0%" x2="100%" y2="100%">' +
-        '<stop offset="0%" stop-color="#e83a00"/>' +
-        '<stop offset="50%" stop-color="#f97316"/>' +
-        '<stop offset="100%" stop-color="#f59e0b"/>' +
+        '<stop offset="0%" stop-color="#e0eaff"/>' +
+        '<stop offset="60%" stop-color="#ffffff"/>' +
+        '<stop offset="100%" stop-color="#b8d0ff"/>' +
       '</linearGradient>' +
-      '<filter id="gi1" x="-30%" y="-30%" width="160%" height="160%">' +
-        '<feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#f97316" flood-opacity="0.45"/>' +
+      '<filter id="gi1" x="-40%" y="-40%" width="180%" height="180%">' +
+        '<feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#4a7fff" flood-opacity="0.6"/>' +
       '</filter>' +
     '</defs>' +
     '<g filter="url(#gi1)">' +
-      '<rect x="2" y="2" width="56" height="56" rx="14" fill="rgba(249,115,22,0.07)" stroke="url(#li1)" stroke-width="1.5"/>' +
-      '<rect x="10" y="40" width="7" height="11" rx="3.5" fill="url(#li1)" opacity="0.55"/>' +
-      '<rect x="21" y="30" width="7" height="21" rx="3.5" fill="url(#li1)" opacity="0.75"/>' +
-      '<rect x="32" y="18" width="7" height="33" rx="3.5" fill="url(#li1)"/>' +
-      '<rect x="43" y="24" width="7" height="27" rx="3.5" fill="url(#li1)" opacity="0.88"/>' +
-      '<path d="M46.5 15 L42 22 L51 22 Z" fill="url(#li1)"/>' +
-      '<line x1="8" y1="53" x2="52" y2="53" stroke="rgba(249,115,22,0.3)" stroke-width="1" stroke-linecap="round"/>' +
+      // 외부 원 링
+      '<circle cx="30" cy="30" r="27" stroke="url(#li1)" stroke-width="2.5" fill="none"/>' +
+      // Q 몸체
+      '<circle cx="30" cy="29" r="12" stroke="url(#li1)" stroke-width="4" fill="none"/>' +
+      // Q 꼬리
+      '<line x1="38" y1="37" x2="44" y2="44" stroke="url(#li1)" stroke-width="4" stroke-linecap="round"/>' +
+      // 상승 화살표
+      '<line x1="38" y1="17" x2="50" y2="7" stroke="url(#li1)" stroke-width="2.8" stroke-linecap="round"/>' +
+      '<polyline points="43,7 50,7 50,14" stroke="url(#li1)" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
     '</g>' +
   '</svg>'
 }
