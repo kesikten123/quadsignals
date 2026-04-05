@@ -192,20 +192,20 @@ function renderLanding() {
       <div style="position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.5) 30%, rgba(245,158,11,0.5) 70%, transparent 100%); pointer-events:none;"></div>
 
       <!-- Navigation -->
-      <nav style="position:relative; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:0 60px; height:72px; background:rgba(8,13,20,0.6); backdrop-filter:blur(24px); border-bottom:1px solid rgba(249,115,22,0.1);">
+      <nav style="position:relative; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:0 20px; height:64px; background:rgba(8,13,20,0.6); backdrop-filter:blur(24px); border-bottom:1px solid rgba(249,115,22,0.1);">
         <div style="display:flex; align-items:center;">${getLogoSVG(200,50)}</div>
         <div style="display:flex; gap:10px; align-items:center;">
           <div style="display:flex; align-items:center; gap:6px; margin-right:8px;">
             <div style="width:7px; height:7px; background:#22c55e; border-radius:50%; box-shadow:0 0 8px #22c55e;"></div>
             <span style="font-size:11px; color:#22c55e; font-weight:700; letter-spacing:0.08em;">LIVE</span>
           </div>
-          <button onclick="navigate('login')" class="btn-secondary" style="padding:9px 22px; font-size:13px;">로그인</button>
-          <button onclick="navigate('register')" class="btn-primary" style="padding:9px 22px; font-size:13px;">무료 가입</button>
+          <button onclick="navigate('login')" class="btn-secondary" style="padding:7px 14px; font-size:12px;">로그인</button>
+          <button onclick="navigate('register')" class="btn-primary" style="padding:7px 14px; font-size:12px;">무료 가입</button>
         </div>
       </nav>
 
       <!-- Hero -->
-      <div style="position:relative; z-index:10; text-align:center; padding:90px 20px 70px;">
+      <div style="position:relative; z-index:10; text-align:center; padding:clamp(40px,8vw,90px) 16px clamp(40px,6vw,70px);">
         <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.18); border-radius:24px; padding:8px 22px; margin-bottom:36px; backdrop-filter:blur(8px);">
           <div style="width:7px; height:7px; background:#22c55e; border-radius:50%; box-shadow:0 0 8px #22c55e; animation:glow 2s ease-in-out infinite;"></div>
           <span style="font-size:12px; color:#f97316; font-weight:600; letter-spacing:0.04em;">실시간 주식 시그널 서비스 운영 중</span>
@@ -218,34 +218,34 @@ function renderLanding() {
           <span style="background:linear-gradient(135deg,#e83a00 0%,#f97316 45%,#f59e0b 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; filter:drop-shadow(0 0 32px rgba(249,115,22,0.3));">결정적 시그널</span>
         </h1>
 
-        <p style="font-size:clamp(15px,2vw,19px); color:#6b7280; max-width:560px; margin:0 auto 52px; line-height:1.8;">
+        <p style="font-size:clamp(13px,2vw,17px); color:#6b7280; max-width:560px; margin:0 auto 36px; line-height:1.8; padding:0 8px;">
           코스피·코스닥 핵심 종목의 매수/매도 시그널을 실시간으로 제공합니다.<br>
           뉴스와 연동된 관련 종목 분석으로 투자 기회를 포착하세요.
         </p>
 
-        <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap;">
-          <button onclick="navigate('register')" class="btn-primary" style="padding:15px 40px; font-size:16px; border-radius:12px; box-shadow:0 0 32px rgba(249,115,22,0.25);">
-            <i class="fas fa-rocket" style="margin-right:9px;"></i>지금 시작하기
+        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; padding:0 16px;">
+          <button onclick="navigate('register')" class="btn-primary" style="padding:clamp(11px,2vw,15px) clamp(24px,5vw,40px); font-size:clamp(14px,2vw,16px); border-radius:12px; box-shadow:0 0 32px rgba(249,115,22,0.25);">
+            <i class="fas fa-rocket" style="margin-right:8px;"></i>지금 시작하기
           </button>
-          <button onclick="navigate('login')" class="btn-secondary" style="padding:15px 40px; font-size:16px; border-radius:12px;">
-            <i class="fas fa-sign-in-alt" style="margin-right:9px;"></i>로그인
+          <button onclick="navigate('login')" class="btn-secondary" style="padding:clamp(11px,2vw,15px) clamp(24px,5vw,40px); font-size:clamp(14px,2vw,16px); border-radius:12px;">
+            <i class="fas fa-sign-in-alt" style="margin-right:8px;"></i>로그인
           </button>
         </div>
       </div>
 
       <!-- Stats bar -->
-      <div style="position:relative; z-index:10; display:flex; justify-content:center; flex-wrap:wrap; border-top:1px solid rgba(249,115,22,0.08); border-bottom:1px solid rgba(249,115,22,0.08); background:rgba(10,15,26,0.6); backdrop-filter:blur(16px);">
+      <div style="position:relative; z-index:10; display:grid; grid-template-columns:repeat(2,1fr); border-top:1px solid rgba(249,115,22,0.08); border-bottom:1px solid rgba(249,115,22,0.08); background:rgba(10,15,26,0.6); backdrop-filter:blur(16px);">
         ${[{num:'200+',label:'분석 종목',icon:'fas fa-chart-bar'},{num:'98.5%',label:'시그널 정확도',icon:'fas fa-bullseye'},{num:'24/7',label:'실시간 모니터링',icon:'fas fa-satellite-dish'},{num:'10K+',label:'활성 회원',icon:'fas fa-users'}].map((s,i) => `
-          <div style="text-align:center; padding:36px 56px; ${i<3?'border-right:1px solid rgba(249,115,22,0.06);':''}">
-            <div style="color:#f97316; font-size:14px; margin-bottom:10px; opacity:0.8;"><i class="${s.icon}"></i></div>
-            <div style="font-size:34px; font-weight:900; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1;">${s.num}</div>
-            <div style="font-size:12px; color:#4b5563; margin-top:8px; letter-spacing:0.04em;">${s.label}</div>
+          <div style="text-align:center; padding:clamp(18px,3vw,36px) clamp(16px,4vw,56px); border-right:${i%2===0?'1px solid rgba(249,115,22,0.06)':'none'}; border-bottom:${i<2?'1px solid rgba(249,115,22,0.06)':'none'};">
+            <div style="color:#f97316; font-size:13px; margin-bottom:8px; opacity:0.8;"><i class="${s.icon}"></i></div>
+            <div style="font-size:clamp(22px,5vw,34px); font-weight:900; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1;">${s.num}</div>
+            <div style="font-size:11px; color:#4b5563; margin-top:6px; letter-spacing:0.04em;">${s.label}</div>
           </div>
         `).join('')}
       </div>
 
       <!-- Features -->
-      <div style="position:relative; z-index:10; padding:80px 60px; max-width:1200px; margin:0 auto;">
+      <div style="position:relative; z-index:10; padding:clamp(40px,6vw,80px) clamp(16px,4vw,60px); max-width:1200px; margin:0 auto;">
         <div style="text-align:center; margin-bottom:60px;">
           <h2 style="font-size:36px; font-weight:800; margin-bottom:12px;">
             <span style="color:rgba(255,255,255,0.9);">왜 </span>
@@ -255,7 +255,7 @@ function renderLanding() {
           <div style="width:60px; height:2px; background:linear-gradient(90deg,#f97316,#f59e0b); margin:16px auto 0; border-radius:2px;"></div>
           <p style="color:#4b5563; margin-top:16px; font-size:15px;">전문가 수준의 투자 시그널을 누구나 쉽게</p>
         </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%,280px), 1fr)); gap:16px;">
           ${[
             {icon:'fa-chart-line', bg:'34,197,94', color:'#22c55e', title:'실시간 매수/매도 시그널', desc:'코스피·코스닥 주요 종목의 기술적·기본적 분석을 결합한 고정확도 시그널을 실시간으로 제공합니다.'},
             {icon:'fa-newspaper', bg:'59,130,246', color:'#3b82f6', title:'뉴스 종목 연동 분석', desc:'네이버 금융 뉴스와 관련 주식 종목을 자동으로 매핑하여 뉴스의 투자 영향력을 즉시 파악할 수 있습니다.'},
@@ -278,17 +278,17 @@ function renderLanding() {
       </div>
 
       <!-- CTA -->
-      <div style="position:relative; z-index:10; text-align:center; padding:80px 20px; background:linear-gradient(180deg,transparent 0%,rgba(249,115,22,0.04) 50%,transparent 100%); border-top:1px solid rgba(249,115,22,0.06); border-bottom:1px solid rgba(249,115,22,0.06);">
+      <div style="position:relative; z-index:10; text-align:center; padding:clamp(40px,6vw,80px) 16px; background:linear-gradient(180deg,transparent 0%,rgba(249,115,22,0.04) 50%,transparent 100%); border-top:1px solid rgba(249,115,22,0.06); border-bottom:1px solid rgba(249,115,22,0.06);">
         <div style="display:flex; justify-content:center; margin-bottom:24px;">${getLogoIcon(52)}</div>
-        <h2 style="font-size:38px; font-weight:900; color:rgba(255,255,255,0.92); margin-bottom:14px;">지금 바로 시작하세요</h2>
-        <p style="color:#4b5563; font-size:15px; margin-bottom:40px;">회원가입 후 관리자 승인을 받으면 모든 서비스를 이용할 수 있습니다.</p>
-        <button onclick="navigate('register')" class="btn-primary" style="padding:16px 56px; font-size:17px; border-radius:14px; box-shadow:0 0 48px rgba(249,115,22,0.3);">
+        <h2 style="font-size:clamp(24px,5vw,38px); font-weight:900; color:rgba(255,255,255,0.92); margin-bottom:14px;">지금 바로 시작하세요</h2>
+        <p style="color:#4b5563; font-size:clamp(13px,2vw,15px); margin-bottom:32px; padding:0 12px;">회원가입 후 관리자 승인을 받으면 모든 서비스를 이용할 수 있습니다.</p>
+        <button onclick="navigate('register')" class="btn-primary" style="padding:clamp(12px,2vw,16px) clamp(32px,6vw,56px); font-size:clamp(14px,2vw,17px); border-radius:14px; box-shadow:0 0 48px rgba(249,115,22,0.3);">
           <i class="fas fa-user-plus" style="margin-right:10px;"></i>무료 회원가입
         </button>
       </div>
 
       <!-- Footer -->
-      <footer style="position:relative; z-index:10; padding:36px 60px; text-align:center; border-top:1px solid rgba(249,115,22,0.06);">
+      <footer style="position:relative; z-index:10; padding:28px 16px; text-align:center; border-top:1px solid rgba(249,115,22,0.06);">
         <div style="display:flex; align-items:center; justify-content:center; margin-bottom:14px;">${getLogoSVG(180,44)}</div>
         <p style="color:#2d3748; font-size:12px; margin-top:4px;">© 2024 QUAD Decisive Signals. 본 서비스는 투자 참고용이며, 투자 결정에 대한 책임은 투자자 본인에게 있습니다.</p>
       </footer>
@@ -638,9 +638,12 @@ function renderUserLayout(page, params) {
       </div>
     </div>
 
-    <!-- Sidebar (fixed, top=98px, z=100) -->
+    <!-- Sidebar overlay (mobile) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar (fixed, top=98px, z=200) -->
     <aside id="sidebar" style="
-      position:fixed; top:98px; left:0; bottom:0; width:240px; z-index:100;
+      position:fixed; top:98px; left:0; bottom:0; width:240px; z-index:200;
       background:rgba(10,14,20,0.98); border-right:1px solid rgba(249,115,22,0.08);
       overflow-y:auto; padding:12px 0; transition:transform 0.3s ease;
     ">
@@ -682,6 +685,9 @@ function renderUserLayout(page, params) {
     </main>
   `
 
+  // 모바일 사이드바 초기화
+  setTimeout(initSidebarResponsive, 0)
+
   // Render page content
   if (page === 'dashboard') renderDashboard()
   else if (page === 'signals') renderSignals()
@@ -693,11 +699,70 @@ function renderUserLayout(page, params) {
 
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar')
+  const overlay = document.getElementById('sidebar-overlay')
   const main = document.getElementById('main-content')
   if (!sidebar) return
-  const isHidden = sidebar.style.transform === 'translateX(-100%)'
-  sidebar.style.transform = isHidden ? 'translateX(0)' : 'translateX(-100%)'
+  const isMobile = window.innerWidth <= 768
+  if (isMobile) {
+    const isOpen = sidebar.classList.contains('open')
+    if (isOpen) {
+      sidebar.classList.remove('open')
+      sidebar.style.transform = 'translateX(-100%)'
+      if (overlay) overlay.classList.remove('active')
+    } else {
+      sidebar.classList.add('open')
+      sidebar.style.transform = 'translateX(0)'
+      if (overlay) overlay.classList.add('active')
+    }
+  } else {
+    const isHidden = sidebar.style.transform === 'translateX(-100%)'
+    sidebar.style.transform = isHidden ? '' : 'translateX(-100%)'
+    if (main) main.style.marginLeft = isHidden ? '240px' : '0'
+  }
 }
+
+function closeSidebar() {
+  const sidebar = document.getElementById('sidebar')
+  const overlay = document.getElementById('sidebar-overlay')
+  if (!sidebar) return
+  if (window.innerWidth <= 768) {
+    sidebar.classList.remove('open')
+    sidebar.style.transform = 'translateX(-100%)'
+    if (overlay) overlay.classList.remove('active')
+  }
+}
+
+function initSidebarResponsive() {
+  const sidebar = document.getElementById('sidebar')
+  const main = document.getElementById('main-content')
+  if (!sidebar || !main) return
+  if (window.innerWidth <= 768) {
+    sidebar.style.transform = 'translateX(-100%)'
+    main.style.marginLeft = '0'
+  } else {
+    sidebar.style.transform = ''
+    main.style.marginLeft = '240px'
+  }
+}
+
+// 창 리사이즈 대응
+window.addEventListener('resize', () => {
+  const sidebar = document.getElementById('sidebar')
+  const main = document.getElementById('main-content')
+  const overlay = document.getElementById('sidebar-overlay')
+  if (!sidebar || !main) return
+  if (window.innerWidth > 768) {
+    sidebar.style.transform = ''
+    sidebar.classList.remove('open')
+    main.style.marginLeft = '240px'
+    if (overlay) overlay.classList.remove('active')
+  } else {
+    if (!sidebar.classList.contains('open')) {
+      sidebar.style.transform = 'translateX(-100%)'
+      main.style.marginLeft = '0'
+    }
+  }
+})
 
 async function handleLogout() {
   await api.post('/auth/logout', {})
@@ -737,7 +802,7 @@ async function renderDashboard() {
 
     document.getElementById('dashboard-content').innerHTML = `
       <!-- Stats Row -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:28px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%,180px), 1fr)); gap:12px; margin-bottom:24px;">
         ${[
           { label: '매수 시그널', value: summary.buyCount + (stocks.filter(s=>s.signal==='BUY').length), icon: 'fas fa-arrow-up', color: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
           { label: '매도 시그널', value: summary.sellCount + (stocks.filter(s=>s.signal==='SELL').length), icon: 'fas fa-arrow-down', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
@@ -1034,7 +1099,7 @@ async function renderMarket(market) {
 
     document.getElementById('market-content').innerHTML = `
       <!-- Market Overview -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:28px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%,180px), 1fr)); gap:12px; margin-bottom:24px;">
         ${[
           { label: '전체 종목', value: stocks.length, color: '#f97316' },
           { label: '매수 시그널', value: stocks.filter(s=>s.signal==='BUY').length, color: '#22c55e' },
@@ -1703,9 +1768,12 @@ function renderAdminLayout(page, params) {
       </div>
     </nav>
 
+    <!-- Sidebar overlay (mobile) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
     <!-- Sidebar (fixed, top=64px, no ticker for admin) -->
     <aside id="sidebar" style="
-      position:fixed; top:64px; left:0; bottom:0; width:240px; z-index:100;
+      position:fixed; top:64px; left:0; bottom:0; width:240px; z-index:200;
       background:rgba(10,14,20,0.98); border-right:1px solid rgba(249,115,22,0.1);
       overflow-y:auto; padding:16px 0; transition:transform 0.3s ease;
     ">
@@ -1737,16 +1805,20 @@ function renderAdminLayout(page, params) {
       </div>
     </aside>
 
-    <!-- Main Content (margin-left=240px, margin-top=64px for admin) -->
+    <!-- Main Content (admin) -->
     <main id="main-content" style="
       margin-left:240px; margin-top:64px;
-      padding:28px 28px 40px;
+      padding:clamp(16px,3vw,28px);
       min-height:calc(100vh - 64px);
       box-sizing:border-box;
+      transition:margin-left 0.3s ease;
     ">
       <div id="page-content"></div>
     </main>
   `
+
+  // 모바일 사이드바 초기화
+  setTimeout(initSidebarResponsive, 0)
 
   if (page === 'admin-dashboard') renderAdminDashboard()
   else if (page === 'admin-pending') renderAdminPending()
@@ -1778,7 +1850,7 @@ async function renderAdminDashboard() {
 
     document.getElementById('admin-dash-content').innerHTML = `
       <!-- Stats -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:28px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%,180px), 1fr)); gap:12px; margin-bottom:24px;">
         ${[
           { label: '전체 회원', value: stats.totalUsers || 0, icon: 'fas fa-users', color: '#f97316', bg: 'rgba(249,115,22,0.1)' },
           { label: '승인 대기', value: stats.pendingUsers || 0, icon: 'fas fa-user-clock', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', urgent: (stats.pendingUsers||0) > 0 },
@@ -1853,7 +1925,7 @@ async function renderAdminDashboard() {
       `}
 
       <!-- Quick Actions -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%,180px), 1fr)); gap:12px;">
         ${[
           { label: '승인 대기 관리', icon: 'fas fa-user-clock', page: 'admin-pending', color: '#f59e0b' },
           { label: '전체 회원 관리', icon: 'fas fa-users', page: 'admin-users', color: '#f97316' },

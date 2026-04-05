@@ -525,17 +525,63 @@ body {
   background: radial-gradient(ellipse at 50% 50%, rgba(249, 115, 22, 0.08) 0%, transparent 70%);
 }
 
-/* Responsive */
+/* ============================================================
+   RESPONSIVE - MOBILE FIRST
+   ============================================================ */
+
+/* 모바일 사이드바 오버레이 */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 99;
+  backdrop-filter: blur(2px);
+}
+.sidebar-overlay.active { display: block; }
+
 @media (max-width: 768px) {
+  /* 사이드바: 모바일에서 숨김, 열리면 오버레이 위로 */
   .sidebar {
     transform: translateX(-100%);
+    z-index: 200;
+    width: 260px;
   }
   .sidebar.open {
     transform: translateX(0);
   }
+  /* 메인 컨텐츠: 사이드바 마진 없앰 */
   .main-content {
-    margin-left: 0;
+    margin-left: 0 !important;
   }
+  /* 테이블 모바일 스크롤 */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .data-table th, .data-table td {
+    padding: 10px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  /* 카드 패딩 줄이기 */
+  .glass-card { border-radius: 12px; }
+  /* 탭 버튼 모바일 */
+  .tab-btn { padding: 8px 14px; font-size: 12px; }
+  /* Toast 위치 */
+  .toast { top: 70px; right: 10px; left: 10px; min-width: unset; max-width: unset; }
+  /* 모달 */
+  .modal-content { padding: 20px; border-radius: 14px; }
+  /* stat-card */
+  .stat-card { padding: 16px; }
+  /* chart */
+  .chart-container { height: 220px; }
+}
+
+@media (max-width: 480px) {
+  .data-table th, .data-table td { padding: 8px 8px; font-size: 11px; }
+  .tab-btn { padding: 6px 10px; font-size: 11px; }
+  .stat-card { padding: 12px; }
 }
 
 /* Admin badge */
