@@ -10,5 +10,11 @@
       "database_name": "quadsignals-production",
       "database_id": "f01934e5-44b8-47df-bac2-8d79213cd476"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "STOCK_CACHE",
+      "id": "4105984439ae430ba5c8ee2e50b90e26"
+    }
   ]
 }

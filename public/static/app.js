@@ -1082,84 +1082,249 @@ async function loadSignals(market, signal) {
 // ============================================================
 // MARKET PAGE (KOSPI / KOSDAQ)
 // ============================================================
+let marketAllStocks  = []   // 전체 종목 보관
+let marketFilteredStocks = [] // 필터 후 종목
+let marketCurrentPage = 1
+const MARKET_PAGE_SIZE = 100
+
 async function renderMarket(market) {
   const content = document.getElementById('page-content')
+  const isKospi = market === 'KOSPI'
+  const marketColor = isKospi ? '#60a5fa' : '#c084fc'
+  const marketBg    = isKospi ? 'rgba(96,165,250,0.08)' : 'rgba(192,132,252,0.08)'
+
   content.innerHTML = `
     <div style="margin-bottom:18px;">
-      <h1 style="font-size:clamp(20px,5vw,26px); font-weight:800; color:white;">${market} 시장</h1>
-      <p style="color:#6b7280; font-size:13px; margin-top:3px;">${market === 'KOSPI' ? '코스피' : '코스닥'} 상장 종목 시그널 분석</p>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h1 style="font-size:clamp(20px,5vw,26px); font-weight:800; color:white;">${market} 시장</h1>
+        <span id="mkt-source-badge" style="font-size:11px; font-weight:700; color:#f59e0b; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.2); border-radius:6px; padding:2px 10px; display:none;">
+          <i class="fas fa-satellite-dish" style="margin-right:4px;"></i>샘플
+        </span>
+      </div>
+      <p style="color:#6b7280; font-size:13px; margin-top:3px;">
+        ${isKospi ? '코스피' : '코스닥'} 상장 종목 실시간 시세 &amp; 시그널 분석
+        <span id="mkt-stock-count" style="color:${marketColor}; font-weight:700; margin-left:6px;">로딩 중...</span>
+      </p>
     </div>
+
+    <!-- 통계 카드 -->
+    <div id="mkt-stat-cards" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:18px;">
+      ${['전체 종목','매수','매도','평균 강도'].map(l=>`
+        <div class="stat-card" style="text-align:center; opacity:0.4;">
+          <div style="font-size:clamp(20px,5vw,30px); font-weight:900; color:#6b7280; margin-bottom:4px;">-</div>
+          <div style="font-size:11px; color:#6b7280;">${l}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- 검색 + 필터 + 정렬 -->
+    <div style="background:rgba(17,24,34,0.7); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:12px 14px; margin-bottom:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+      <div style="position:relative; flex:1; min-width:160px;">
+        <i class="fas fa-search" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;"></i>
+        <input type="text" id="mkt-search" class="form-input"
+          placeholder="종목명·코드·섹터 검색"
+          style="padding:9px 12px 9px 32px; font-size:13px; width:100%; box-sizing:border-box;"
+          oninput="applyMarketFilter()">
+      </div>
+      <select id="mkt-signal-filter" class="form-input" style="padding:9px 12px; font-size:13px; width:auto; flex-shrink:0;" onchange="applyMarketFilter()">
+        <option value="ALL">전체 시그널</option>
+        <option value="BUY">BUY만</option>
+        <option value="HOLD">HOLD만</option>
+        <option value="SELL">SELL만</option>
+      </select>
+      <select id="mkt-sort" class="form-input" style="padding:9px 12px; font-size:13px; width:auto; flex-shrink:0;" onchange="applyMarketFilter()">
+        <option value="volume">거래량순</option>
+        <option value="changeRate_desc">상승률순</option>
+        <option value="changeRate_asc">하락률순</option>
+        <option value="strength_desc">강도 높은순</option>
+        <option value="price_desc">고가순</option>
+      </select>
+      <button onclick="applyMarketFilter()" class="btn-primary" style="padding:9px 14px; font-size:13px; flex-shrink:0;">
+        <i class="fas fa-filter" style="margin-right:5px;"></i>적용
+      </button>
+    </div>
+
     <div id="market-content">
-      <div style="display:flex; justify-content:center; padding:60px;"><div class="spinner"></div></div>
+      <div style="display:flex; flex-direction:column; align-items:center; padding:60px; gap:16px;">
+        <div class="spinner"></div>
+        <p style="color:#6b7280; font-size:13px;">키움 REST API에서 종목 데이터를 가져오는 중...</p>
+      </div>
     </div>
   `
 
   try {
-    const res = await api.get(`/stocks/${market.toLowerCase()}`)
+    const res = await api.get(`/stocks/${market.toLowerCase()}?limit=2000`)
     const stocks = res.success ? res.stocks : []
+    const source  = res.source || 'fallback'
+    marketAllStocks = stocks
 
-    document.getElementById('market-content').innerHTML = `
-      <!-- Market Overview -->
-      <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:18px;">
-        ${[
-          { label: '전체 종목', value: stocks.length, color: '#f97316' },
-          { label: '매수 시그널', value: stocks.filter(s=>s.signal==='BUY').length, color: '#22c55e' },
-          { label: '매도 시그널', value: stocks.filter(s=>s.signal==='SELL').length, color: '#ef4444' },
-          { label: '평균 강도', value: Math.round(stocks.reduce((a,s)=>a+(s.strength||50),0)/stocks.length||0) + '%', color: '#f59e0b' },
-        ].map(stat => `
-          <div class="stat-card" style="text-align:center;">
-            <div style="font-size:clamp(24px,6vw,36px); font-weight:900; color:${stat.color}; margin-bottom:6px;">${stat.value}</div>
-            <div style="font-size:12px; color:#6b7280;">${stat.label}</div>
-          </div>
-        `).join('')}
-      </div>
+    // 통계 카드 업데이트
+    const buyCount  = stocks.filter(s=>s.signal==='BUY').length
+    const sellCount = stocks.filter(s=>s.signal==='SELL').length
+    const avgStr    = stocks.length ? Math.round(stocks.reduce((a,s)=>a+(s.strength||50),0)/stocks.length) : 0
+    document.getElementById('mkt-stat-cards').innerHTML = [
+      { label:'전체 종목',   value: stocks.length,               color: marketColor },
+      { label:'매수 시그널', value: buyCount,                    color: '#22c55e' },
+      { label:'매도 시그널', value: sellCount,                   color: '#ef4444' },
+      { label:'평균 강도',   value: avgStr + '%',                color: '#f59e0b' },
+    ].map(stat => `
+      <div class="stat-card" style="text-align:center;">
+        <div style="font-size:clamp(20px,5vw,30px); font-weight:900; color:${stat.color}; margin-bottom:4px;">${stat.value}</div>
+        <div style="font-size:11px; color:#6b7280;">${stat.label}</div>
+      </div>`).join('')
 
-      <!-- Table (scrollable) -->
-      <div style="background:rgba(22,27,34,0.8); border:1px solid rgba(249,115,22,0.08); border-radius:16px; overflow:hidden;">
-        <div style="padding:16px 18px; border-bottom:1px solid var(--brand-border);">
-          <h3 style="font-size:15px; font-weight:700; color:white;">${market} 종목 시그널 현황</h3>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table" style="min-width:520px;">
-            <thead>
-              <tr>
-                <th>종목명</th>
-                <th>현재가</th>
-                <th>등락률</th>
-                <th>시그널</th>
-                <th>강도</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${stocks.map(s => `
-                <tr onclick="showStockDetail('${s.code}', '${s.name}')" style="cursor:pointer;">
-                  <td>
-                    <div style="font-weight:600; color:white; font-size:13px;">${s.name}</div>
-                    <div style="font-size:11px; color:#4b5563;">${s.code}</div>
-                  </td>
-                  <td style="font-weight:700; color:white; white-space:nowrap; font-size:13px;">${(s.price||0).toLocaleString()}</td>
-                  <td style="color:${(s.changeRate||0) >= 0 ? '#ef4444' : '#3b82f6'}; font-weight:700; white-space:nowrap; font-size:13px;">
-                    ${(s.changeRate||0) >= 0 ? '▲' : '▼'} ${Math.abs(s.changeRate||0).toFixed(2)}%
-                  </td>
-                  <td><span class="signal-${(s.signal||'HOLD').toLowerCase()}">${s.signal||'HOLD'}</span></td>
-                  <td>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                      <div class="strength-bar" style="width:60px;">
-                        <div class="strength-fill" style="width:${s.strength||50}%; background:${s.signal==='BUY'?'#22c55e':s.signal==='SELL'?'#ef4444':'#f59e0b'};"></div>
-                      </div>
-                      <span style="font-size:11px; color:#9ca3af;">${s.strength||50}%</span>
-                    </div>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `
+    // 데이터 소스 뱃지
+    const srcBadge = document.getElementById('mkt-source-badge')
+    if (srcBadge) {
+      if (source === 'kiwoom') {
+        srcBadge.innerHTML = '<i class="fas fa-check-circle" style="margin-right:4px;"></i>키움 실시간'
+        srcBadge.style.color = '#22c55e'
+        srcBadge.style.background = 'rgba(34,197,94,0.1)'
+        srcBadge.style.borderColor = 'rgba(34,197,94,0.25)'
+      } else if (source === 'kiwoom_partial') {
+        srcBadge.innerHTML = '<i class="fas fa-exclamation-circle" style="margin-right:4px;"></i>키움(일부)'
+        srcBadge.style.color = '#f59e0b'
+      } else {
+        srcBadge.innerHTML = '<i class="fas fa-database" style="margin-right:4px;"></i>샘플 데이터'
+      }
+      srcBadge.style.display = 'inline-flex'
+      srcBadge.style.alignItems = 'center'
+    }
+    const cntEl = document.getElementById('mkt-stock-count')
+    if (cntEl) cntEl.textContent = `총 ${stocks.length.toLocaleString()}종목`
+
+    // 초기 필터 적용
+    applyMarketFilter()
+
   } catch (err) {
-    document.getElementById('market-content').innerHTML = '<div style="color:#ef4444; padding:20px;">데이터 로드 실패</div>'
+    document.getElementById('market-content').innerHTML =
+      '<div style="color:#ef4444; padding:20px;"><i class="fas fa-exclamation-circle" style="margin-right:8px;"></i>데이터 로드 실패. 잠시 후 다시 시도해주세요.</div>'
   }
+}
+
+function applyMarketFilter() {
+  const search  = (document.getElementById('mkt-search')?.value || '').toLowerCase()
+  const sigFilt = document.getElementById('mkt-signal-filter')?.value || 'ALL'
+  const sortBy  = document.getElementById('mkt-sort')?.value || 'volume'
+
+  let filtered = marketAllStocks.filter(s => {
+    const matchSearch = !search ||
+      (s.name||'').toLowerCase().includes(search) ||
+      (s.code||'').includes(search) ||
+      (s.sector||'').toLowerCase().includes(search)
+    const matchSig = sigFilt === 'ALL' || s.signal === sigFilt
+    return matchSearch && matchSig
+  })
+
+  // 정렬
+  filtered.sort((a,b) => {
+    if (sortBy === 'changeRate_desc') return (b.changeRate||0) - (a.changeRate||0)
+    if (sortBy === 'changeRate_asc')  return (a.changeRate||0) - (b.changeRate||0)
+    if (sortBy === 'strength_desc')   return (b.strength||0)   - (a.strength||0)
+    if (sortBy === 'price_desc')      return (b.price||0)       - (a.price||0)
+    return (b.volume||0) - (a.volume||0)  // 기본: 거래량
+  })
+
+  marketFilteredStocks = filtered
+  marketCurrentPage = 1
+  renderMarketTable()
+}
+
+function renderMarketTable() {
+  const container = document.getElementById('market-content')
+  if (!container) return
+  const total  = marketFilteredStocks.length
+  const start  = (marketCurrentPage - 1) * MARKET_PAGE_SIZE
+  const end    = Math.min(start + MARKET_PAGE_SIZE, total)
+  const page   = marketFilteredStocks.slice(start, end)
+  const totalPages = Math.ceil(total / MARKET_PAGE_SIZE)
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+      <span style="font-size:13px; color:#9ca3af;">
+        <b style="color:white;">${total.toLocaleString()}</b>종목 중
+        <b style="color:white;">${start+1}–${end}</b> 표시
+      </span>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button onclick="changeMarketPage(${marketCurrentPage-1})"
+          style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:6px 12px; border-radius:7px; cursor:pointer; font-size:12px; ${marketCurrentPage<=1?'opacity:0.4;cursor:default;':''}">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <span style="font-size:12px; color:#9ca3af;">${marketCurrentPage} / ${totalPages}</span>
+        <button onclick="changeMarketPage(${marketCurrentPage+1})"
+          style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:6px 12px; border-radius:7px; cursor:pointer; font-size:12px; ${marketCurrentPage>=totalPages?'opacity:0.4;cursor:default;':''}">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <div style="background:rgba(22,27,34,0.8); border:1px solid rgba(249,115,22,0.08); border-radius:16px; overflow:hidden;">
+      <div class="table-wrap">
+        <table class="data-table" style="min-width:560px;">
+          <thead>
+            <tr>
+              <th style="width:32px;">#</th>
+              <th>종목명</th>
+              <th>현재가</th>
+              <th>등락률</th>
+              <th>거래량</th>
+              <th>섹터</th>
+              <th>시그널</th>
+              <th>강도</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${page.map((s, idx) => {
+              const rank = start + idx + 1
+              const chgColor = (s.changeRate||0) >= 0 ? '#ef4444' : '#3b82f6'
+              return `
+              <tr onclick="showStockDetail('${s.code}', '${s.name}')" style="cursor:pointer;">
+                <td style="color:#4b5563; font-size:12px; font-weight:600;">${rank}</td>
+                <td>
+                  <div style="font-weight:700; color:white; font-size:13px;">${s.name}</div>
+                  <div style="font-size:10px; color:#4b5563; letter-spacing:0.03em;">${s.code}</div>
+                </td>
+                <td style="font-weight:700; color:white; white-space:nowrap; font-size:13px;">${(s.price||0).toLocaleString()}<span style="font-size:10px; color:#6b7280; margin-left:2px;">원</span></td>
+                <td style="color:${chgColor}; font-weight:700; white-space:nowrap; font-size:13px;">
+                  ${(s.changeRate||0) >= 0 ? '▲' : '▼'} ${Math.abs(s.changeRate||0).toFixed(2)}%
+                </td>
+                <td style="font-size:12px; color:#9ca3af; white-space:nowrap;">${(s.volume||0).toLocaleString()}</td>
+                <td style="font-size:11px; color:#6b7280; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${s.sector||'-'}">${s.sector||'-'}</td>
+                <td><span class="signal-${(s.signal||'HOLD').toLowerCase()}">${s.signal||'HOLD'}</span></td>
+                <td>
+                  <div style="display:flex; align-items:center; gap:5px;">
+                    <div class="strength-bar" style="width:50px;">
+                      <div class="strength-fill" style="width:${s.strength||50}%; background:${s.signal==='BUY'?'#22c55e':s.signal==='SELL'?'#ef4444':'#f59e0b'};"></div>
+                    </div>
+                    <span style="font-size:11px; color:#9ca3af; min-width:28px;">${s.strength||50}%</span>
+                  </div>
+                </td>
+              </tr>`
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:center; gap:6px; margin-top:14px; flex-wrap:wrap;">
+      ${Array.from({length: Math.min(totalPages,10)}, (_,i) => i+1).map(p => `
+        <button onclick="changeMarketPage(${p})"
+          style="padding:6px 12px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer;
+            background:${p===marketCurrentPage?'linear-gradient(135deg,#e83a00,#f97316)':'rgba(255,255,255,0.05)'};
+            border:1px solid ${p===marketCurrentPage?'transparent':'rgba(255,255,255,0.08)'};
+            color:${p===marketCurrentPage?'white':'#9ca3af'};">
+          ${p}
+        </button>`).join('')}
+      ${totalPages > 10 ? `<span style="color:#4b5563; font-size:12px; padding:6px 8px;">... ${totalPages}페이지</span>` : ''}
+    </div>
+  `
+}
+
+function changeMarketPage(page) {
+  const totalPages = Math.ceil(marketFilteredStocks.length / MARKET_PAGE_SIZE)
+  if (page < 1 || page > totalPages) return
+  marketCurrentPage = page
+  renderMarketTable()
+  document.getElementById('page-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 // ============================================================
