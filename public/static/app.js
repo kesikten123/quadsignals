@@ -1980,39 +1980,54 @@ async function renderAdminDashboard() {
 
       <!-- Pending Users -->
       ${pendingUsers.length > 0 ? `
-        <div style="background:rgba(22,27,34,0.8); border:1px solid rgba(245,158,11,0.2); border-radius:16px; overflow:hidden; margin-bottom:18px;">
-          <div style="padding:14px 18px; border-bottom:1px solid var(--brand-border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <div style="background:rgba(22,27,34,0.8); border:1px solid rgba(245,158,11,0.25); border-radius:16px; overflow:hidden; margin-bottom:18px;">
+          <div style="padding:14px 18px; border-bottom:1px solid var(--brand-border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; background:rgba(245,158,11,0.04);">
             <div style="display:flex; align-items:center; gap:8px;">
-              <div style="width:7px; height:7px; background:#f59e0b; border-radius:50%;"></div>
+              <div style="width:8px; height:8px; background:#f59e0b; border-radius:50%; box-shadow:0 0 6px #f59e0b; animation:glow 2s ease-in-out infinite;"></div>
               <h3 style="font-size:14px; font-weight:700; color:white;">승인 대기 (${pendingUsers.length}명)</h3>
+              <span style="font-size:11px; color:#6b7280;">— 행을 클릭하면 상세 정보를 볼 수 있습니다</span>
             </div>
-            <button onclick="navigate('admin-pending')" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.2); color:#f59e0b; padding:6px 14px; border-radius:7px; font-size:12px; cursor:pointer; font-weight:600;">전체보기</button>
+            <button onclick="navigate('admin-pending')" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.25); color:#f59e0b; padding:6px 14px; border-radius:7px; font-size:12px; cursor:pointer; font-weight:600;">
+              <i class="fas fa-list" style="margin-right:4px;"></i>전체 보기
+            </button>
           </div>
           <div class="table-wrap">
-            <table class="data-table" style="min-width:440px;">
+            <table class="data-table" style="min-width:520px;">
               <thead>
                 <tr>
-                  <th>이름</th>
-                  <th>아이디</th>
+                  <th>이름 / 아이디</th>
                   <th>이메일</th>
-                  <th>가입일</th>
+                  <th>전화번호</th>
+                  <th>신청일</th>
                   <th>처리</th>
                 </tr>
               </thead>
               <tbody>
                 ${pendingUsers.slice(0, 5).map(u => `
-                  <tr>
-                    <td style="font-weight:600; color:white;">${u.name}</td>
-                    <td style="color:#9ca3af;">${u.username}</td>
-                    <td style="color:#9ca3af; font-size:12px;">${u.email}</td>
-                    <td style="color:#6b7280; font-size:12px;">${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
+                  <tr style="cursor:pointer;" onclick="showUserDetailModal(${JSON.stringify(u).replace(/"/g,'&quot;')})">
                     <td>
-                      <div style="display:flex; gap:6px;">
-                        <button onclick="approveUser(${u.id})" style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); color:#22c55e; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px; min-height:36px;">
-                          <i class="fas fa-check"></i>
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="width:32px; height:32px; background:rgba(249,115,22,0.15); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; color:var(--brand-orange); flex-shrink:0;">
+                          ${(u.name||'?')[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div style="font-size:13px; font-weight:700; color:white;">${u.name}</div>
+                          <div style="font-size:11px; color:#6b7280;">@${u.username}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style="color:#9ca3af; font-size:12px;">${u.email}</td>
+                    <td style="color:#9ca3af; font-size:12px;">${u.phone || '-'}</td>
+                    <td style="color:#6b7280; font-size:12px;">${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
+                    <td onclick="event.stopPropagation()">
+                      <div style="display:flex; gap:5px;">
+                        <button onclick="approveUser(${u.id})"
+                          style="background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.3); color:#22c55e; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:700; min-height:34px; white-space:nowrap;">
+                          <i class="fas fa-check" style="margin-right:3px;"></i>승인
                         </button>
-                        <button onclick="rejectUser(${u.id})" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px; min-height:36px;">
-                          <i class="fas fa-times"></i>
+                        <button onclick="rejectUser(${u.id})"
+                          style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); color:#ef4444; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px; min-height:34px; white-space:nowrap;">
+                          <i class="fas fa-times" style="margin-right:3px;"></i>거부
                         </button>
                       </div>
                     </td>
@@ -2021,9 +2036,16 @@ async function renderAdminDashboard() {
               </tbody>
             </table>
           </div>
+          ${pendingUsers.length > 5 ? `
+            <div style="padding:10px 18px; text-align:center; border-top:1px solid rgba(255,255,255,0.04);">
+              <button onclick="navigate('admin-pending')" style="background:none; border:none; color:#f59e0b; font-size:12px; cursor:pointer; font-weight:600;">
+                <i class="fas fa-chevron-down" style="margin-right:4px;"></i>나머지 ${pendingUsers.length - 5}명 더 보기
+              </button>
+            </div>
+          ` : ''}
         </div>
       ` : `
-        <div style="background:rgba(34,197,94,0.05); border:1px solid rgba(34,197,94,0.15); border-radius:16px; padding:28px; text-align:center; margin-bottom:18px;">
+        <div style="background:rgba(34,197,94,0.04); border:1px solid rgba(34,197,94,0.15); border-radius:16px; padding:28px; text-align:center; margin-bottom:18px;">
           <i class="fas fa-check-circle" style="font-size:36px; color:#22c55e; display:block; margin-bottom:10px;"></i>
           <div style="font-size:15px; font-weight:600; color:#22c55e;">모든 가입 신청이 처리되었습니다</div>
           <div style="font-size:12px; color:#6b7280; margin-top:5px;">새로운 가입 신청이 없습니다</div>
@@ -2076,8 +2098,8 @@ async function loadPendingUsers() {
 
     if (users.length === 0) {
       content.innerHTML = `
-        <div style="text-align:center; padding:60px;">
-          <i class="fas fa-check-circle" style="font-size:48px; color:#22c55e; display:block; margin-bottom:16px;"></i>
+        <div style="text-align:center; padding:60px; background:rgba(22,27,34,0.6); border:1px solid rgba(34,197,94,0.15); border-radius:20px;">
+          <i class="fas fa-check-circle" style="font-size:52px; color:#22c55e; display:block; margin-bottom:16px;"></i>
           <h3 style="font-size:18px; font-weight:700; color:white; margin-bottom:7px;">대기 중인 신청이 없습니다</h3>
           <p style="color:#6b7280; font-size:13px;">모든 가입 신청이 처리되었습니다.</p>
         </div>
@@ -2086,49 +2108,123 @@ async function loadPendingUsers() {
     }
 
     content.innerHTML = `
-      <div style="display:grid; gap:12px;">
-        ${users.map(u => `
-          <div class="glass-card" style="padding:18px;">
-            <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:14px;">
-              <div style="width:46px; height:46px; background:rgba(249,115,22,0.1); border:2px solid rgba(249,115,22,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:var(--brand-orange); flex-shrink:0;">
-                ${u.name[0]}
+      <!-- 카운트 배지 -->
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+        <div style="background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:8px 16px; display:flex; align-items:center; gap:8px;">
+          <div style="width:8px; height:8px; background:#f59e0b; border-radius:50%; box-shadow:0 0 6px #f59e0b; animation:glow 2s ease-in-out infinite;"></div>
+          <span style="font-size:13px; font-weight:700; color:#f59e0b;">${users.length}명 승인 대기 중</span>
+        </div>
+        <span style="font-size:12px; color:#4b5563;">가입 신청서를 검토 후 승인 또는 거부해 주세요</span>
+      </div>
+
+      <div style="display:grid; gap:14px;">
+        ${users.map((u, idx) => {
+          const regDate = new Date(u.created_at)
+          const diffMs  = Date.now() - regDate
+          const diffH   = Math.floor(diffMs / 3600000)
+          const diffD   = Math.floor(diffMs / 86400000)
+          const waitStr = diffD > 0 ? `${diffD}일 전 신청` : diffH > 0 ? `${diffH}시간 전 신청` : '방금 신청'
+          const isUrgent = diffD >= 2
+
+          return `
+          <div class="glass-card" style="padding:0; overflow:hidden; border:1px solid ${isUrgent ? 'rgba(239,68,68,0.25)' : 'rgba(249,115,22,0.12)'};">
+            <!-- 카드 헤더 -->
+            <div style="padding:16px 18px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(255,255,255,0.02);">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <!-- 아바타 -->
+                <div style="width:48px; height:48px; background:linear-gradient(135deg,rgba(249,115,22,0.3),rgba(245,158,11,0.3)); border:2px solid rgba(249,115,22,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; color:var(--brand-orange); flex-shrink:0;">
+                  ${(u.name||'?')[0].toUpperCase()}
+                </div>
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-size:16px; font-weight:800; color:white;">${u.name}</span>
+                    <span style="font-size:11px; color:#9ca3af; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:5px; padding:2px 7px;">@${u.username}</span>
+                    ${isUrgent ? `<span style="font-size:10px; color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:4px; padding:1px 6px; font-weight:700;"><i class="fas fa-clock" style="margin-right:2px;"></i>장기 대기</span>` : ''}
+                  </div>
+                  <div style="font-size:12px; color:#6b7280; margin-top:3px;">
+                    <i class="fas fa-clock" style="margin-right:4px; font-size:10px;"></i>${waitStr}
+                  </div>
+                </div>
               </div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-size:15px; font-weight:700; color:white;">${u.name}</div>
-                <div style="font-size:12px; color:#6b7280; margin-top:2px;">@${u.username}</div>
+              <div style="text-align:right; flex-shrink:0;">
+                <div style="font-size:10px; color:#4b5563;">신청번호</div>
+                <div style="font-size:13px; font-weight:700; color:#6b7280;">#${String(u.id).padStart(4,'0')}</div>
               </div>
             </div>
-            
-            <!-- 사용자 정보 그리드 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px;">
-              <div>
-                <div style="font-size:10px; color:#4b5563; margin-bottom:2px;">이메일</div>
-                <div style="font-size:13px; color:#9ca3af; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${u.email}</div>
+
+            <!-- 인적 정보 섹션 -->
+            <div style="padding:16px 18px; border-bottom:1px solid rgba(255,255,255,0.04);">
+              <div style="font-size:10px; font-weight:700; color:#4b5563; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:12px;">
+                <i class="fas fa-id-card" style="margin-right:5px; color:#f97316;"></i>제출된 인적 정보
               </div>
-              <div>
-                <div style="font-size:10px; color:#4b5563; margin-bottom:2px;">전화번호</div>
-                <div style="font-size:13px; color:#9ca3af;">${u.phone}</div>
-              </div>
-              <div>
-                <div style="font-size:10px; color:#4b5563; margin-bottom:2px;">가입일</div>
-                <div style="font-size:13px; color:#9ca3af;">${new Date(u.created_at).toLocaleDateString('ko-KR')}</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:11px 14px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                    <i class="fas fa-user" style="font-size:10px; color:#f97316; width:12px;"></i>
+                    <span style="font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">이름</span>
+                  </div>
+                  <div style="font-size:14px; font-weight:700; color:white;">${u.name}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:11px 14px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                    <i class="fas fa-at" style="font-size:10px; color:#3b82f6; width:12px;"></i>
+                    <span style="font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">아이디</span>
+                  </div>
+                  <div style="font-size:14px; font-weight:700; color:#60a5fa;">@${u.username}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:11px 14px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                    <i class="fas fa-envelope" style="font-size:10px; color:#22c55e; width:12px;"></i>
+                    <span style="font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">이메일</span>
+                  </div>
+                  <div style="font-size:13px; font-weight:600; color:#86efac; word-break:break-all;">${u.email}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:11px 14px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                    <i class="fas fa-phone" style="font-size:10px; color:#a78bfa; width:12px;"></i>
+                    <span style="font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">전화번호</span>
+                  </div>
+                  <div style="font-size:14px; font-weight:700; color:#c4b5fd;">${u.phone || '미입력'}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:11px 14px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                    <i class="fas fa-calendar-alt" style="font-size:10px; color:#f59e0b; width:12px;"></i>
+                    <span style="font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">신청일시</span>
+                  </div>
+                  <div style="font-size:13px; font-weight:600; color:#fcd34d;">${regDate.toLocaleDateString('ko-KR')} ${regDate.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:11px 14px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                    <i class="fas fa-shield-alt" style="font-size:10px; color:#ef4444; width:12px;"></i>
+                    <span style="font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">상태</span>
+                  </div>
+                  <div style="font-size:13px; font-weight:700; color:#f59e0b;"><i class="fas fa-hourglass-half" style="margin-right:4px;"></i>승인 대기 중</div>
+                </div>
               </div>
             </div>
-            
-            <div style="display:flex; gap:10px;">
-              <button onclick="approveUser(${u.id})" class="btn-primary" style="flex:1; padding:12px; font-size:14px; border-radius:10px;">
-                <i class="fas fa-check" style="margin-right:6px;"></i>승인
+
+            <!-- 액션 버튼 -->
+            <div style="padding:14px 18px; display:flex; gap:10px; flex-wrap:wrap;">
+              <button onclick="approveUser(${u.id})"
+                style="flex:1; min-width:120px; padding:13px 20px; background:linear-gradient(135deg,#16a34a,#22c55e); border:none; border-radius:10px; color:white; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; transition:all 0.2s; box-shadow:0 2px 12px rgba(34,197,94,0.25);"
+                onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 18px rgba(34,197,94,0.4)';"
+                onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 12px rgba(34,197,94,0.25)';">
+                <i class="fas fa-check-circle"></i> 승인하기
               </button>
-              <button onclick="rejectUser(${u.id})" class="btn-secondary" style="flex:1; padding:12px; font-size:14px; border-radius:10px; border-color:rgba(239,68,68,0.5); color:#ef4444;">
-                <i class="fas fa-times" style="margin-right:6px;"></i>거부
+              <button onclick="rejectUser(${u.id})"
+                style="flex:1; min-width:120px; padding:13px 20px; background:rgba(239,68,68,0.08); border:1.5px solid rgba(239,68,68,0.35); border-radius:10px; color:#ef4444; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; transition:all 0.2s;"
+                onmouseover="this.style.background='rgba(239,68,68,0.15)';"
+                onmouseout="this.style.background='rgba(239,68,68,0.08)';">
+                <i class="fas fa-times-circle"></i> 거부하기
               </button>
             </div>
           </div>
-        `).join('')}
+          `
+        }).join('')}
       </div>
     `
   } catch (err) {
-    content.innerHTML = '<div style="color:#ef4444;">데이터 로드 실패</div>'
+    content.innerHTML = '<div style="color:#ef4444; padding:20px;">데이터 로드 실패</div>'
   }
 }
 
@@ -2161,13 +2257,35 @@ async function rejectUser(id) {
 // ============================================================
 // ADMIN USERS
 // ============================================================
+let _adminAllUsers = []
+
 async function renderAdminUsers() {
   const content = document.getElementById('page-content')
   content.innerHTML = `
-    <div style="margin-bottom:20px;">
-      <h1 style="font-size:clamp(20px,5vw,26px); font-weight:800; color:white;">전체 회원 관리</h1>
-      <p style="color:#6b7280; font-size:13px; margin-top:3px;">가입된 모든 회원을 관리합니다</p>
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:18px; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="font-size:clamp(20px,5vw,26px); font-weight:800; color:white;">전체 회원 관리</h1>
+        <p style="color:#6b7280; font-size:13px; margin-top:3px;">가입된 모든 회원의 인적 정보 및 상태를 관리합니다</p>
+      </div>
     </div>
+
+    <!-- 검색 + 필터 -->
+    <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:180px; position:relative;">
+        <i class="fas fa-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;"></i>
+        <input type="text" id="user-search" placeholder="이름, 아이디, 이메일 검색…"
+          oninput="filterAdminUsers()"
+          style="width:100%; padding:10px 12px 10px 36px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:white; font-size:13px; box-sizing:border-box;">
+      </div>
+      <select id="user-filter" onchange="filterAdminUsers()"
+        style="padding:10px 14px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#d1d5db; font-size:13px; cursor:pointer;">
+        <option value="all">전체 상태</option>
+        <option value="pending">대기중</option>
+        <option value="approved">승인됨</option>
+        <option value="rejected">거부됨</option>
+      </select>
+    </div>
+
     <div id="users-content">
       <div style="display:flex; justify-content:center; padding:60px;"><div class="spinner"></div></div>
     </div>
@@ -2175,80 +2293,324 @@ async function renderAdminUsers() {
 
   try {
     const res = await api.get('/admin/users')
-    const users = res.success ? res.users : []
-
-    document.getElementById('users-content').innerHTML = `
-      <div style="background:rgba(22,27,34,0.8); border:1px solid rgba(249,115,22,0.08); border-radius:16px; overflow:hidden;">
-        <div style="padding:14px 18px; border-bottom:1px solid var(--brand-border);">
-          <h3 style="font-size:14px; font-weight:700; color:white;">전체 회원 목록 (${users.length}명)</h3>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table" style="min-width:500px;">
-            <thead>
-              <tr>
-                <th>이름</th>
-                <th>아이디</th>
-                <th>이메일</th>
-                <th>상태</th>
-                <th>가입일</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${users.map(u => `
-                <tr>
-                  <td style="font-weight:600; color:white;">${u.name}</td>
-                  <td style="color:#9ca3af;">@${u.username}</td>
-                  <td style="color:#9ca3af; font-size:12px;">${u.email}</td>
-                  <td>
-                    <span style="
-                      padding:3px 9px; border-radius:16px; font-size:11px; font-weight:600;
-                      ${u.status === 'approved' ? 'background:rgba(34,197,94,0.1); color:#22c55e; border:1px solid rgba(34,197,94,0.2);' : 
-                        u.status === 'pending' ? 'background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2);' :
-                        'background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2);'}
-                    ">
-                      ${u.status === 'approved' ? '승인됨' : u.status === 'pending' ? '대기중' : '거부됨'}
-                    </span>
-                  </td>
-                  <td style="color:#6b7280; font-size:12px;">${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
-                  <td>
-                    <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                      ${u.status === 'pending' ? `
-                        <button onclick="approveUserFromList(${u.id})" style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); color:#22c55e; padding:5px 9px; border-radius:6px; cursor:pointer; font-size:11px; min-height:34px;">승인</button>
-                        <button onclick="rejectUserFromList(${u.id})" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; padding:5px 9px; border-radius:6px; cursor:pointer; font-size:11px; min-height:34px;">거부</button>
-                      ` : ''}
-                      ${u.role !== 'admin' ? `
-                        <button onclick="deleteUser(${u.id})" style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); color:#374151; padding:5px 9px; border-radius:6px; cursor:pointer; font-size:11px; min-height:34px;">삭제</button>
-                      ` : ''}
-                    </div>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `
+    _adminAllUsers = res.success ? res.users : []
+    renderUserTable(_adminAllUsers)
   } catch (err) {
-    document.getElementById('users-content').innerHTML = '<div style="color:#ef4444;">데이터 로드 실패</div>'
+    document.getElementById('users-content').innerHTML = '<div style="color:#ef4444; padding:20px;">데이터 로드 실패</div>'
   }
+}
+
+function filterAdminUsers() {
+  const q      = (document.getElementById('user-search')?.value || '').toLowerCase().trim()
+  const filter = document.getElementById('user-filter')?.value || 'all'
+  let list = _adminAllUsers
+  if (filter !== 'all') list = list.filter(u => u.status === filter)
+  if (q) list = list.filter(u =>
+    (u.name||'').toLowerCase().includes(q) ||
+    (u.username||'').toLowerCase().includes(q) ||
+    (u.email||'').toLowerCase().includes(q) ||
+    (u.phone||'').includes(q)
+  )
+  renderUserTable(list)
+}
+
+function renderUserTable(users) {
+  const el = document.getElementById('users-content')
+  if (!el) return
+
+  const statusCount = {
+    total: users.length,
+    pending:  users.filter(u => u.status === 'pending').length,
+    approved: users.filter(u => u.status === 'approved').length,
+    rejected: users.filter(u => u.status === 'rejected').length,
+  }
+
+  el.innerHTML = `
+    <!-- 요약 배지 -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+      ${[
+        { label:'전체', count: statusCount.total,    col:'#9ca3af', bg:'rgba(255,255,255,0.05)' },
+        { label:'대기', count: statusCount.pending,  col:'#f59e0b', bg:'rgba(245,158,11,0.08)' },
+        { label:'승인', count: statusCount.approved, col:'#22c55e', bg:'rgba(34,197,94,0.08)'  },
+        { label:'거부', count: statusCount.rejected, col:'#ef4444', bg:'rgba(239,68,68,0.08)'  },
+      ].map(s => `
+        <div style="background:${s.bg}; border:1px solid ${s.col}33; border-radius:8px; padding:6px 14px; display:flex; align-items:center; gap:6px;">
+          <span style="font-size:11px; color:${s.col}; font-weight:600;">${s.label}</span>
+          <span style="font-size:14px; font-weight:800; color:${s.col};">${s.count}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- 데스크탑: 테이블 / 모바일: 카드 -->
+    <div class="table-wrap" style="display:none;" id="user-table-wrap">
+      <table class="data-table" style="min-width:640px;">
+        <thead>
+          <tr>
+            <th style="width:40px;">#</th>
+            <th>이름 / 아이디</th>
+            <th>이메일</th>
+            <th>전화번호</th>
+            <th>상태</th>
+            <th>가입일</th>
+            <th>관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map((u, idx) => {
+            const statusStyle = u.status === 'approved'
+              ? 'background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.25);'
+              : u.status === 'pending'
+              ? 'background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);'
+              : 'background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);'
+            const statusLabel = u.status === 'approved' ? '✓ 승인됨' : u.status === 'pending' ? '⏳ 대기중' : '✗ 거부됨'
+            return `
+            <tr style="cursor:pointer;" onclick="showUserDetailModal(${JSON.stringify(u).replace(/"/g,'&quot;')})">
+              <td style="color:#4b5563; font-size:12px;">${idx+1}</td>
+              <td>
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <div style="width:34px; height:34px; background:linear-gradient(135deg,rgba(249,115,22,0.25),rgba(245,158,11,0.25)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; color:var(--brand-orange); flex-shrink:0;">
+                    ${(u.name||'?')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div style="font-size:13px; font-weight:700; color:white;">${u.name}</div>
+                    <div style="font-size:11px; color:#6b7280;">@${u.username}</div>
+                  </div>
+                </div>
+              </td>
+              <td style="color:#9ca3af; font-size:12px;">${u.email}</td>
+              <td style="color:#9ca3af; font-size:12px;">${u.phone || '-'}</td>
+              <td onclick="event.stopPropagation()">
+                <span style="padding:3px 10px; border-radius:16px; font-size:11px; font-weight:700; ${statusStyle}">${statusLabel}</span>
+              </td>
+              <td style="color:#6b7280; font-size:12px;">${new Date(u.created_at).toLocaleDateString('ko-KR')}</td>
+              <td onclick="event.stopPropagation()">
+                <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                  ${u.status === 'pending' ? `
+                    <button onclick="approveUserFromList(${u.id})" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;min-height:32px;">
+                      <i class="fas fa-check"></i> 승인
+                    </button>
+                    <button onclick="rejectUserFromList(${u.id})" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#ef4444;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;min-height:32px;">
+                      <i class="fas fa-times"></i> 거부
+                    </button>
+                  ` : u.status === 'rejected' ? `
+                    <button onclick="approveUserFromList(${u.id})" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#22c55e;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;min-height:32px;">
+                      <i class="fas fa-redo"></i> 재승인
+                    </button>
+                  ` : ''}
+                  ${u.role !== 'admin' ? `
+                    <button onclick="deleteUser(${u.id})" style="background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.1);color:#6b7280;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;min-height:32px;">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  ` : `<span style="font-size:11px; color:#f97316; padding:4px 8px;"><i class="fas fa-crown"></i> 관리자</span>`}
+                </div>
+              </td>
+            </tr>
+          `}).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 모바일: 카드 목록 -->
+    <div id="user-card-list" style="display:flex; flex-direction:column; gap:10px;">
+      ${users.map(u => {
+        const statusStyle = u.status === 'approved'
+          ? 'color:#22c55e; border-color:rgba(34,197,94,0.3);'
+          : u.status === 'pending'
+          ? 'color:#f59e0b; border-color:rgba(245,158,11,0.3);'
+          : 'color:#ef4444; border-color:rgba(239,68,68,0.3);'
+        const statusLabel = u.status === 'approved' ? '승인됨' : u.status === 'pending' ? '대기중' : '거부됨'
+        const statusIcon  = u.status === 'approved' ? 'fa-check-circle' : u.status === 'pending' ? 'fa-hourglass-half' : 'fa-times-circle'
+        return `
+        <div class="glass-card" style="padding:14px; cursor:pointer;" onclick="showUserDetailModal(${JSON.stringify(u).replace(/"/g,'&quot;')})">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+            <div style="width:40px; height:40px; background:linear-gradient(135deg,rgba(249,115,22,0.25),rgba(245,158,11,0.25)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; color:var(--brand-orange); flex-shrink:0;">
+              ${(u.name||'?')[0].toUpperCase()}
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:14px; font-weight:700; color:white;">${u.name}</div>
+              <div style="font-size:11px; color:#6b7280;">@${u.username}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px; border:1px solid; border-radius:20px; padding:3px 10px; flex-shrink:0; ${statusStyle}">
+              <i class="fas ${statusIcon}" style="font-size:10px;"></i>
+              <span style="font-size:11px; font-weight:700;">${statusLabel}</span>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:7px; font-size:12px; padding:10px; background:rgba(255,255,255,0.02); border-radius:8px; margin-bottom:10px;">
+            <div><span style="color:#4b5563;">이메일</span><br><span style="color:#9ca3af; word-break:break-all;">${u.email}</span></div>
+            <div><span style="color:#4b5563;">전화번호</span><br><span style="color:#9ca3af;">${u.phone || '-'}</span></div>
+            <div><span style="color:#4b5563;">가입일</span><br><span style="color:#9ca3af;">${new Date(u.created_at).toLocaleDateString('ko-KR')}</span></div>
+            <div><span style="color:#4b5563;">권한</span><br><span style="color:${u.role==='admin'?'#f97316':'#9ca3af'}; font-weight:${u.role==='admin'?'700':'400'};">${u.role === 'admin' ? '관리자' : '일반'}</span></div>
+          </div>
+          <div style="display:flex; gap:8px;" onclick="event.stopPropagation()">
+            ${u.status === 'pending' ? `
+              <button onclick="approveUserFromList(${u.id})" style="flex:1; padding:10px; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.3); border-radius:8px; color:#22c55e; font-size:13px; font-weight:700; cursor:pointer;">
+                <i class="fas fa-check" style="margin-right:4px;"></i>승인
+              </button>
+              <button onclick="rejectUserFromList(${u.id})" style="flex:1; padding:10px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:8px; color:#ef4444; font-size:13px; cursor:pointer;">
+                <i class="fas fa-times" style="margin-right:4px;"></i>거부
+              </button>
+            ` : u.status === 'rejected' ? `
+              <button onclick="approveUserFromList(${u.id})" style="flex:1; padding:10px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:8px; color:#22c55e; font-size:13px; cursor:pointer;">
+                <i class="fas fa-redo" style="margin-right:4px;"></i>재승인
+              </button>
+            ` : `<div style="flex:1; text-align:center; padding:8px; font-size:12px; color:#4b5563;"><i class="fas fa-info-circle" style="margin-right:4px;"></i>상세 정보 보기</div>`}
+            ${u.role !== 'admin' ? `
+              <button onclick="deleteUser(${u.id})" style="padding:10px 14px; background:rgba(239,68,68,0.04); border:1px solid rgba(239,68,68,0.1); border-radius:8px; color:#6b7280; font-size:13px; cursor:pointer;">
+                <i class="fas fa-trash"></i>
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `}).join('')}
+    </div>
+
+    ${users.length === 0 ? `
+      <div style="text-align:center; padding:60px; color:#6b7280;">
+        <i class="fas fa-users" style="font-size:40px; display:block; margin-bottom:14px; color:#374151;"></i>
+        검색 결과가 없습니다
+      </div>
+    ` : ''}
+  `
+
+  // 화면 크기에 따라 테이블/카드 전환
+  applyUserTableLayout()
+  window.addEventListener('resize', applyUserTableLayout)
+}
+
+function applyUserTableLayout() {
+  const tableWrap = document.getElementById('user-table-wrap')
+  const cardList  = document.getElementById('user-card-list')
+  if (!tableWrap || !cardList) return
+  if (window.innerWidth > 768) {
+    tableWrap.style.display = 'block'
+    cardList.style.display  = 'none'
+  } else {
+    tableWrap.style.display = 'none'
+    cardList.style.display  = 'flex'
+  }
+}
+
+// 회원 상세 정보 모달
+function showUserDetailModal(u) {
+  if (typeof u === 'string') { try { u = JSON.parse(u) } catch { return } }
+  const existing = document.getElementById('user-detail-modal')
+  if (existing) existing.remove()
+
+  const statusLabel = u.status === 'approved' ? '승인됨' : u.status === 'pending' ? '승인 대기중' : '거부됨'
+  const statusColor = u.status === 'approved' ? '#22c55e' : u.status === 'pending' ? '#f59e0b' : '#ef4444'
+  const regDate = new Date(u.created_at)
+  const approvedDate = u.approved_at ? new Date(u.approved_at) : null
+
+  const overlay = document.createElement('div')
+  overlay.id = 'user-detail-modal'
+  overlay.className = 'modal-overlay'
+  overlay.innerHTML = `
+    <div class="modal-content" style="max-width:520px; padding:0; overflow:hidden;">
+      <!-- 모달 헤더 -->
+      <div style="padding:20px 22px 16px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:52px; height:52px; background:linear-gradient(135deg,rgba(249,115,22,0.3),rgba(245,158,11,0.3)); border:2px solid rgba(249,115,22,0.35); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:var(--brand-orange); flex-shrink:0;">
+            ${(u.name||'?')[0].toUpperCase()}
+          </div>
+          <div>
+            <div style="font-size:17px; font-weight:800; color:white;">${u.name}</div>
+            <div style="display:flex; align-items:center; gap:7px; margin-top:3px;">
+              <span style="font-size:12px; color:#6b7280;">@${u.username}</span>
+              <span style="font-size:11px; font-weight:700; color:${statusColor}; background:${statusColor}18; border:1px solid ${statusColor}44; border-radius:5px; padding:1px 7px;">${statusLabel}</span>
+              ${u.role === 'admin' ? `<span style="font-size:10px; color:#f97316; background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.25); border-radius:4px; padding:1px 6px; font-weight:700;"><i class="fas fa-crown" style="margin-right:2px;"></i>관리자</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <button onclick="document.getElementById('user-detail-modal').remove()" style="background:rgba(255,255,255,0.06); border:none; color:#9ca3af; width:36px; height:36px; border-radius:9px; cursor:pointer; font-size:16px; flex-shrink:0;">✕</button>
+      </div>
+
+      <!-- 인적 정보 -->
+      <div style="padding:20px 22px;">
+        <div style="font-size:10px; font-weight:700; color:#4b5563; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:14px;">
+          <i class="fas fa-id-card" style="margin-right:5px; color:#f97316;"></i>인적 정보
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;">
+          ${[
+            { icon:'fa-user',         label:'이름',     val: u.name,                                                    color:'#f97316' },
+            { icon:'fa-at',           label:'아이디',   val: '@'+u.username,                                            color:'#3b82f6' },
+            { icon:'fa-envelope',     label:'이메일',   val: u.email,                                                   color:'#22c55e' },
+            { icon:'fa-phone',        label:'전화번호', val: u.phone || '미입력',                                       color:'#a78bfa' },
+            { icon:'fa-calendar-alt', label:'가입일시', val: regDate.toLocaleDateString('ko-KR')+' '+regDate.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}), color:'#f59e0b' },
+            { icon:'fa-check-circle', label:'승인일시', val: approvedDate ? approvedDate.toLocaleDateString('ko-KR')+' '+approvedDate.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '-', color:'#22c55e' },
+          ].map(f => `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:10px; padding:12px 14px;">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                <i class="fas ${f.icon}" style="font-size:10px; color:${f.color}; width:12px;"></i>
+                <span style="font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">${f.label}</span>
+              </div>
+              <div style="font-size:13px; font-weight:600; color:#e5e7eb; word-break:break-all;">${f.val}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <!-- 액션 버튼 -->
+        ${u.role !== 'admin' ? `
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          ${u.status === 'pending' ? `
+            <button onclick="approveUserFromList(${u.id}); document.getElementById('user-detail-modal').remove();"
+              style="flex:1; min-width:110px; padding:12px 16px; background:linear-gradient(135deg,#16a34a,#22c55e); border:none; border-radius:10px; color:white; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 2px 12px rgba(34,197,94,0.25);">
+              <i class="fas fa-check-circle"></i> 승인하기
+            </button>
+            <button onclick="rejectUserFromList(${u.id}); document.getElementById('user-detail-modal').remove();"
+              style="flex:1; min-width:110px; padding:12px 16px; background:rgba(239,68,68,0.08); border:1.5px solid rgba(239,68,68,0.3); border-radius:10px; color:#ef4444; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px;">
+              <i class="fas fa-times-circle"></i> 거부하기
+            </button>
+          ` : u.status === 'rejected' ? `
+            <button onclick="approveUserFromList(${u.id}); document.getElementById('user-detail-modal').remove();"
+              style="flex:1; padding:12px 16px; background:linear-gradient(135deg,#16a34a,#22c55e); border:none; border-radius:10px; color:white; font-size:14px; font-weight:700; cursor:pointer;">
+              <i class="fas fa-redo" style="margin-right:6px;"></i>재승인
+            </button>
+          ` : `
+            <button onclick="rejectUserFromList(${u.id}); document.getElementById('user-detail-modal').remove();"
+              style="flex:1; padding:12px 16px; background:rgba(239,68,68,0.08); border:1.5px solid rgba(239,68,68,0.3); border-radius:10px; color:#ef4444; font-size:14px; font-weight:700; cursor:pointer;">
+              <i class="fas fa-ban" style="margin-right:6px;"></i>승인 취소
+            </button>
+          `}
+          <button onclick="if(confirm('정말 삭제하시겠습니까?')){deleteUser(${u.id}); document.getElementById('user-detail-modal').remove();}"
+            style="padding:12px 16px; background:rgba(239,68,68,0.04); border:1px solid rgba(239,68,68,0.1); border-radius:10px; color:#6b7280; font-size:14px; cursor:pointer;">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+        ` : `<div style="text-align:center; padding:12px; color:#f97316; font-size:13px; font-weight:600;"><i class="fas fa-crown" style="margin-right:6px;"></i>관리자 계정은 수정할 수 없습니다</div>`}
+      </div>
+    </div>
+  `
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() })
+  document.body.appendChild(overlay)
 }
 
 async function approveUserFromList(id) {
   const res = await api.put(`/admin/users/${id}/approve`)
-  if (res.success) { showToast('승인되었습니다.'); await renderAdminUsers() }
+  if (res.success) {
+    showToast('승인되었습니다.')
+    await renderAdminUsers()
+    if (document.getElementById('admin-dash-content')) await renderAdminDashboard()
+  } else {
+    showToast(res.message || '처리 실패', 'error')
+  }
 }
 
 async function rejectUserFromList(id) {
   if (!confirm('정말 거부하시겠습니까?')) return
   const res = await api.put(`/admin/users/${id}/reject`)
-  if (res.success) { showToast('거부되었습니다.'); await renderAdminUsers() }
+  if (res.success) {
+    showToast('거부되었습니다.')
+    await renderAdminUsers()
+  } else {
+    showToast(res.message || '처리 실패', 'error')
+  }
 }
 
 async function deleteUser(id) {
-  if (!confirm('정말 이 회원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return
+  if (!confirm('정말 이 회원을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return
   const res = await api.delete(`/admin/users/${id}`)
   if (res.success) { showToast('삭제되었습니다.'); await renderAdminUsers() }
+  else showToast(res.message || '삭제 실패', 'error')
 }
 
 // ============================================================
