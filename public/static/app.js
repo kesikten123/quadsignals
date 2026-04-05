@@ -652,6 +652,10 @@ function renderUserLayout(page, params) {
       <div style="margin: 14px 16px 0; padding-top:14px; border-top:1px solid rgba(255,255,255,0.04);">
         <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:8px;">계정</p>
       </div>
+      <div class="sidebar-item ${page === 'settings' ? 'active' : ''}" onclick="navigate('settings'); closeSidebar();">
+        <i class="fas fa-cog" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">계정 설정</span>
+      </div>
       <div class="sidebar-item" onclick="handleLogout()">
         <i class="fas fa-sign-out-alt" style="width:16px; text-align:center; font-size:14px; color:#ef4444;"></i>
         <span style="font-size:14px; color:#ef4444;">로그아웃</span>
@@ -697,6 +701,7 @@ function renderUserLayout(page, params) {
   else if (page === 'kospi') renderMarket('KOSPI')
   else if (page === 'kosdaq') renderMarket('KOSDAQ')
   else if (page === 'news') renderNews()
+  else if (page === 'settings') renderSettings()
   else renderDashboard()
 }
 
@@ -1884,6 +1889,10 @@ function renderAdminLayout(page, params) {
       <div style="margin:14px 16px 0; padding-top:14px; border-top:1px solid rgba(255,255,255,0.04);">
         <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:7px;">서비스</p>
       </div>
+      <div class="sidebar-item ${page === 'admin-settings' ? 'active' : ''}" onclick="navigate('admin-settings'); closeSidebar();">
+        <i class="fas fa-cog" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">관리자 설정</span>
+      </div>
       <div class="sidebar-item" onclick="navigate('dashboard'); closeSidebar();">
         <i class="fas fa-chart-line" style="width:16px; text-align:center; font-size:14px;"></i>
         <span style="font-size:14px;">사용자 뷰</span>
@@ -1932,6 +1941,7 @@ function renderAdminLayout(page, params) {
   else if (page === 'admin-pending') renderAdminPending()
   else if (page === 'admin-users') renderAdminUsers()
   else if (page === 'admin-signals') renderAdminSignals()
+  else if (page === 'admin-settings') renderAdminSettings()
   else renderAdminDashboard()
 }
 
@@ -2828,6 +2838,300 @@ async function deleteSignal(id) {
   if (!confirm('이 시그널을 삭제하시겠습니까?')) return
   const res = await api.delete(`/admin/signals/${id}`)
   if (res.success) { showToast('시그널이 삭제되었습니다.'); await loadAdminSignals() }
+}
+
+// ============================================================
+// SETTINGS PAGE (사용자 비밀번호 변경)
+// ============================================================
+function renderSettings() {
+  const content = document.getElementById('page-content')
+  content.innerHTML = `
+    <div style="margin-bottom:24px;">
+      <h1 style="font-size:clamp(20px,5vw,26px); font-weight:800; color:white;">
+        <i class="fas fa-cog" style="color:#f97316; margin-right:10px;"></i>계정 설정
+      </h1>
+      <p style="color:#6b7280; font-size:13px; margin-top:3px;">비밀번호 변경 등 계정 정보를 관리합니다</p>
+    </div>
+
+    <!-- 내 정보 카드 -->
+    <div style="background:rgba(17,24,34,0.8); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:24px; margin-bottom:20px; max-width:520px;">
+      <h2 style="font-size:15px; font-weight:700; color:white; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-user-circle" style="color:#f97316;"></i> 내 정보
+      </h2>
+      <div style="display:grid; gap:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+          <span style="font-size:12px; color:#6b7280;">이름</span>
+          <span style="font-size:14px; font-weight:600; color:white;">${currentUser?.name || '-'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+          <span style="font-size:12px; color:#6b7280;">아이디</span>
+          <span style="font-size:14px; font-weight:600; color:white;">${currentUser?.username || '-'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+          <span style="font-size:12px; color:#6b7280;">이메일</span>
+          <span style="font-size:14px; font-weight:600; color:white;">${currentUser?.email || '-'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+          <span style="font-size:12px; color:#6b7280;">권한</span>
+          <span style="font-size:13px; font-weight:700; color:#22c55e; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:6px; padding:2px 10px;">승인됨</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 비밀번호 변경 카드 -->
+    <div style="background:rgba(17,24,34,0.8); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:24px; max-width:520px;">
+      <h2 style="font-size:15px; font-weight:700; color:white; margin-bottom:6px; display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-lock" style="color:#f97316;"></i> 비밀번호 변경
+      </h2>
+      <p style="font-size:12px; color:#6b7280; margin-bottom:18px;">변경 후 자동으로 로그아웃되며 새 비밀번호로 재로그인하세요.</p>
+
+      <div id="pw-change-msg" style="display:none; margin-bottom:14px;"></div>
+
+      <form onsubmit="handleChangePassword(event, 'user')" autocomplete="off">
+        <div style="margin-bottom:14px;">
+          <label style="display:block; font-size:12px; font-weight:600; color:#9ca3af; margin-bottom:6px;">현재 비밀번호 *</label>
+          <div style="position:relative;">
+            <i class="fas fa-lock" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;"></i>
+            <input type="password" id="pw-current" class="form-input" placeholder="현재 비밀번호 입력" style="padding-left:38px;" required autocomplete="current-password">
+          </div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block; font-size:12px; font-weight:600; color:#9ca3af; margin-bottom:6px;">새 비밀번호 * (8자 이상)</label>
+          <div style="position:relative;">
+            <i class="fas fa-key" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;"></i>
+            <input type="password" id="pw-new" class="form-input" placeholder="새 비밀번호 (8자 이상)" style="padding-left:38px;" required minlength="8" autocomplete="new-password">
+          </div>
+          <div id="pw-strength-bar" style="margin-top:6px; display:none;">
+            <div style="height:4px; border-radius:4px; background:rgba(255,255,255,0.06); overflow:hidden;">
+              <div id="pw-strength-fill" style="height:100%; width:0%; border-radius:4px; transition:all 0.3s;"></div>
+            </div>
+            <span id="pw-strength-text" style="font-size:11px; color:#6b7280; margin-top:3px; display:block;"></span>
+          </div>
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block; font-size:12px; font-weight:600; color:#9ca3af; margin-bottom:6px;">새 비밀번호 확인 *</label>
+          <div style="position:relative;">
+            <i class="fas fa-check-circle" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;" id="pw-confirm-icon"></i>
+            <input type="password" id="pw-confirm" class="form-input" placeholder="새 비밀번호 재입력" style="padding-left:38px;" required autocomplete="new-password" oninput="checkPasswordMatch()">
+          </div>
+        </div>
+        <button type="submit" id="pw-submit-btn" class="btn-primary" style="width:100%; padding:13px; font-size:14px; font-weight:700;">
+          <i class="fas fa-save" style="margin-right:7px;"></i>비밀번호 변경
+        </button>
+      </form>
+    </div>
+  `
+
+  // 비밀번호 강도 체크
+  const pwNew = document.getElementById('pw-new')
+  if (pwNew) {
+    pwNew.addEventListener('input', () => {
+      const val = pwNew.value
+      const bar = document.getElementById('pw-strength-bar')
+      const fill = document.getElementById('pw-strength-fill')
+      const text = document.getElementById('pw-strength-text')
+      if (!val) { bar.style.display = 'none'; return }
+      bar.style.display = 'block'
+      let score = 0
+      if (val.length >= 8) score++
+      if (/[A-Z]/.test(val)) score++
+      if (/[0-9]/.test(val)) score++
+      if (/[^A-Za-z0-9]/.test(val)) score++
+      const levels = [
+        { pct: '25%', color: '#ef4444', label: '매우 약함' },
+        { pct: '50%', color: '#f97316', label: '약함' },
+        { pct: '75%', color: '#f59e0b', label: '보통' },
+        { pct: '100%', color: '#22c55e', label: '강함' },
+      ]
+      const lv = levels[score - 1] || levels[0]
+      fill.style.width = lv.pct
+      fill.style.background = lv.color
+      text.textContent = `비밀번호 강도: ${lv.label}`
+      text.style.color = lv.color
+    })
+  }
+}
+
+function checkPasswordMatch() {
+  const newPw = document.getElementById('pw-new')?.value || ''
+  const confirmPw = document.getElementById('pw-confirm')?.value || ''
+  const icon = document.getElementById('pw-confirm-icon')
+  if (!icon) return
+  if (confirmPw.length === 0) {
+    icon.style.color = '#4b5563'
+  } else if (newPw === confirmPw) {
+    icon.style.color = '#22c55e'
+  } else {
+    icon.style.color = '#ef4444'
+  }
+}
+
+async function handleChangePassword(e, role) {
+  e.preventDefault()
+  const btn = document.getElementById('pw-submit-btn')
+  const msgDiv = document.getElementById('pw-change-msg')
+
+  const currentPassword = document.getElementById('pw-current')?.value
+  const newPassword = document.getElementById('pw-new')?.value
+  const confirmPassword = document.getElementById('pw-confirm')?.value
+
+  if (newPassword !== confirmPassword) {
+    msgDiv.innerHTML = '<div class="alert-error"><i class="fas fa-exclamation-circle"></i> 새 비밀번호와 확인 비밀번호가 일치하지 않습니다.</div>'
+    msgDiv.style.display = 'block'
+    return
+  }
+
+  btn.disabled = true
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:7px;"></i>변경 중...'
+  msgDiv.style.display = 'none'
+
+  try {
+    const res = await api.post('/auth/change-password', { currentPassword, newPassword, confirmPassword })
+    if (res.success) {
+      msgDiv.innerHTML = `<div class="alert-success" style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); border-radius:8px; padding:12px 16px; color:#22c55e; font-size:13px;"><i class="fas fa-check-circle" style="margin-right:8px;"></i>${res.message}</div>`
+      msgDiv.style.display = 'block'
+      setTimeout(async () => {
+        await api.post('/auth/logout', {})
+        localStorage.removeItem('token')
+        currentUser = null
+        showToast('비밀번호가 변경되었습니다. 다시 로그인해주세요.')
+        navigate('login')
+      }, 2000)
+    } else {
+      msgDiv.innerHTML = `<div class="alert-error"><i class="fas fa-exclamation-circle"></i> ${res.message}</div>`
+      msgDiv.style.display = 'block'
+      btn.disabled = false
+      btn.innerHTML = '<i class="fas fa-save" style="margin-right:7px;"></i>비밀번호 변경'
+    }
+  } catch (err) {
+    msgDiv.innerHTML = '<div class="alert-error"><i class="fas fa-exclamation-circle"></i> 오류가 발생했습니다.</div>'
+    msgDiv.style.display = 'block'
+    btn.disabled = false
+    btn.innerHTML = '<i class="fas fa-save" style="margin-right:7px;"></i>비밀번호 변경'
+  }
+}
+
+// ============================================================
+// ADMIN SETTINGS PAGE (관리자 비밀번호 변경)
+// ============================================================
+function renderAdminSettings() {
+  const content = document.getElementById('page-content')
+  content.innerHTML = `
+    <div style="margin-bottom:24px;">
+      <h1 style="font-size:clamp(20px,5vw,26px); font-weight:800; color:white;">
+        <i class="fas fa-cog" style="color:#f97316; margin-right:10px;"></i>관리자 설정
+      </h1>
+      <p style="color:#6b7280; font-size:13px; margin-top:3px;">관리자 계정 정보 및 비밀번호를 관리합니다</p>
+    </div>
+
+    <!-- 관리자 정보 카드 -->
+    <div style="background:rgba(17,24,34,0.8); border:1px solid rgba(249,115,22,0.15); border-radius:16px; padding:24px; margin-bottom:20px; max-width:520px;">
+      <h2 style="font-size:15px; font-weight:700; color:white; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-user-shield" style="color:#f97316;"></i> 관리자 정보
+      </h2>
+      <div style="display:grid; gap:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(249,115,22,0.04); border-radius:10px; border:1px solid rgba(249,115,22,0.08);">
+          <span style="font-size:12px; color:#6b7280;">이름</span>
+          <span style="font-size:14px; font-weight:600; color:white;">${currentUser?.name || '-'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(249,115,22,0.04); border-radius:10px; border:1px solid rgba(249,115,22,0.08);">
+          <span style="font-size:12px; color:#6b7280;">아이디</span>
+          <span style="font-size:14px; font-weight:600; color:white;">${currentUser?.username || '-'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(249,115,22,0.04); border-radius:10px; border:1px solid rgba(249,115,22,0.08);">
+          <span style="font-size:12px; color:#6b7280;">이메일</span>
+          <span style="font-size:14px; font-weight:600; color:white;">${currentUser?.email || '-'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(249,115,22,0.04); border-radius:10px; border:1px solid rgba(249,115,22,0.08);">
+          <span style="font-size:12px; color:#6b7280;">권한</span>
+          <span style="font-size:13px; font-weight:700; color:#f97316; background:rgba(249,115,22,0.1); border:1px solid rgba(249,115,22,0.25); border-radius:6px; padding:2px 10px;">
+            <i class="fas fa-crown" style="margin-right:4px; font-size:10px;"></i>ADMIN
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 비밀번호 변경 카드 -->
+    <div style="background:rgba(17,24,34,0.8); border:1px solid rgba(249,115,22,0.15); border-radius:16px; padding:24px; max-width:520px;">
+      <h2 style="font-size:15px; font-weight:700; color:white; margin-bottom:6px; display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-lock" style="color:#f97316;"></i> 비밀번호 변경
+      </h2>
+      <p style="font-size:12px; color:#6b7280; margin-bottom:18px;">변경 후 자동으로 로그아웃되며 새 비밀번호로 재로그인하세요.</p>
+
+      <div id="pw-change-msg" style="display:none; margin-bottom:14px;"></div>
+
+      <form onsubmit="handleChangePassword(event, 'admin')" autocomplete="off">
+        <div style="margin-bottom:14px;">
+          <label style="display:block; font-size:12px; font-weight:600; color:#9ca3af; margin-bottom:6px;">현재 비밀번호 *</label>
+          <div style="position:relative;">
+            <i class="fas fa-lock" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;"></i>
+            <input type="password" id="pw-current" class="form-input" placeholder="현재 비밀번호 입력" style="padding-left:38px;" required autocomplete="current-password">
+          </div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block; font-size:12px; font-weight:600; color:#9ca3af; margin-bottom:6px;">새 비밀번호 * (8자 이상)</label>
+          <div style="position:relative;">
+            <i class="fas fa-key" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;"></i>
+            <input type="password" id="pw-new" class="form-input" placeholder="새 비밀번호 (8자 이상)" style="padding-left:38px;" required minlength="8" autocomplete="new-password">
+          </div>
+          <div id="pw-strength-bar" style="margin-top:6px; display:none;">
+            <div style="height:4px; border-radius:4px; background:rgba(255,255,255,0.06); overflow:hidden;">
+              <div id="pw-strength-fill" style="height:100%; width:0%; border-radius:4px; transition:all 0.3s;"></div>
+            </div>
+            <span id="pw-strength-text" style="font-size:11px; color:#6b7280; margin-top:3px; display:block;"></span>
+          </div>
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block; font-size:12px; font-weight:600; color:#9ca3af; margin-bottom:6px;">새 비밀번호 확인 *</label>
+          <div style="position:relative;">
+            <i class="fas fa-check-circle" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#4b5563; font-size:13px;" id="pw-confirm-icon"></i>
+            <input type="password" id="pw-confirm" class="form-input" placeholder="새 비밀번호 재입력" style="padding-left:38px;" required autocomplete="new-password" oninput="checkPasswordMatch()">
+          </div>
+        </div>
+        <button type="submit" id="pw-submit-btn" class="btn-primary" style="width:100%; padding:13px; font-size:14px; font-weight:700; background:linear-gradient(135deg,#e83a00,#f97316);">
+          <i class="fas fa-save" style="margin-right:7px;"></i>관리자 비밀번호 변경
+        </button>
+      </form>
+
+      <div style="margin-top:20px; padding:14px 16px; background:rgba(249,115,22,0.05); border:1px solid rgba(249,115,22,0.12); border-radius:10px;">
+        <p style="font-size:12px; color:#f97316; font-weight:600; margin-bottom:6px;"><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>보안 안내</p>
+        <ul style="font-size:11px; color:#6b7280; line-height:1.8; padding-left:16px; margin:0;">
+          <li>비밀번호는 8자 이상, 영문·숫자·특수문자 조합을 권장합니다.</li>
+          <li>변경 후 기존 로그인 세션은 모두 종료됩니다.</li>
+          <li>관리자 비밀번호는 정기적으로 변경해주세요.</li>
+        </ul>
+      </div>
+    </div>
+  `
+
+  // 비밀번호 강도 체크 (관리자용)
+  const pwNew = document.getElementById('pw-new')
+  if (pwNew) {
+    pwNew.addEventListener('input', () => {
+      const val = pwNew.value
+      const bar = document.getElementById('pw-strength-bar')
+      const fill = document.getElementById('pw-strength-fill')
+      const text = document.getElementById('pw-strength-text')
+      if (!val) { bar.style.display = 'none'; return }
+      bar.style.display = 'block'
+      let score = 0
+      if (val.length >= 8) score++
+      if (/[A-Z]/.test(val)) score++
+      if (/[0-9]/.test(val)) score++
+      if (/[^A-Za-z0-9]/.test(val)) score++
+      const levels = [
+        { pct: '25%', color: '#ef4444', label: '매우 약함' },
+        { pct: '50%', color: '#f97316', label: '약함' },
+        { pct: '75%', color: '#f59e0b', label: '보통' },
+        { pct: '100%', color: '#22c55e', label: '강함' },
+      ]
+      const lv = levels[score - 1] || levels[0]
+      fill.style.width = lv.pct
+      fill.style.background = lv.color
+      text.textContent = `비밀번호 강도: ${lv.label}`
+      text.style.color = lv.color
+    })
+  }
 }
 
 // ============================================================

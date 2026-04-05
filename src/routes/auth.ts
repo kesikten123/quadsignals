@@ -173,6 +173,66 @@ authRoutes.get('/reset-accounts', async (c) => {
   }
 })
 
+// 비밀번호 변경 (본인 인증 후)
+authRoutes.post('/change-password', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, message: '인증이 필요합니다.' }, 401)
+    }
+
+    const token = authHeader.substring(7)
+    const payload = await verifyToken(token, c.env.JWT_SECRET || 'default-secret-key')
+    if (!payload) {
+      return c.json({ success: false, message: '유효하지 않은 토큰입니다.' }, 401)
+    }
+
+    const { currentPassword, newPassword, confirmPassword } = await c.req.json()
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return c.json({ success: false, message: '모든 필드를 입력해주세요.' }, 400)
+    }
+
+    if (newPassword.length < 8) {
+      return c.json({ success: false, message: '새 비밀번호는 8자 이상이어야 합니다.' }, 400)
+    }
+
+    if (newPassword !== confirmPassword) {
+      return c.json({ success: false, message: '새 비밀번호와 확인 비밀번호가 일치하지 않습니다.' }, 400)
+    }
+
+    const user = await c.env.DB.prepare(
+      'SELECT id, username, password_hash, status FROM users WHERE id = ?'
+    ).bind(payload.userId).first() as any
+
+    if (!user || user.status !== 'approved') {
+      return c.json({ success: false, message: '접근 권한이 없습니다.' }, 403)
+    }
+
+    const isValid = await verifyPassword(currentPassword, user.password_hash)
+    if (!isValid) {
+      return c.json({ success: false, message: '현재 비밀번호가 올바르지 않습니다.' }, 401)
+    }
+
+    if (currentPassword === newPassword) {
+      return c.json({ success: false, message: '새 비밀번호는 현재 비밀번호와 달라야 합니다.' }, 400)
+    }
+
+    const newHash = await hashPassword(newPassword)
+    await c.env.DB.prepare(
+      'UPDATE users SET password_hash = ? WHERE id = ?'
+    ).bind(newHash, payload.userId).run()
+
+    // 기존 세션 모두 삭제 (재로그인 필요)
+    await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(payload.userId).run()
+
+    return c.json({ success: true, message: '비밀번호가 성공적으로 변경되었습니다. 다시 로그인해주세요.' })
+  } catch (error) {
+    console.error('Change password error:', error)
+    return c.json({ success: false, message: '서버 오류가 발생했습니다.' }, 500)
+  }
+})
+
 // 로그아웃
 authRoutes.post('/logout', async (c) => {
   try {
