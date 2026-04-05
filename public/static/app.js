@@ -564,7 +564,7 @@ function renderUserLayout(page, params) {
         <button onclick="toggleSidebar()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:20px; padding:8px; border-radius:8px; min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center;">
           <i class="fas fa-bars"></i>
         </button>
-        ${getLogoSVG(140,36)}
+        <div onclick="navigate('dashboard')" style="cursor:pointer; display:flex; align-items:center;">${getLogoSVG(140,36)}</div>
       </div>
       <div style="display:flex; align-items:center; gap:8px;">
         <div style="display:none; align-items:center; gap:4px;" id="navbar-live">
@@ -1833,12 +1833,14 @@ function renderAdminLayout(page, params) {
         <button onclick="toggleSidebar()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:20px; padding:8px; border-radius:8px; min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center;">
           <i class="fas fa-bars"></i>
         </button>
-        ${getLogoIcon(32)}
-        <div style="line-height:1; margin-left:4px;">
-          <div style="font-weight:800; font-size:15px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
-          <div style="font-size:8px; color:#4b5563; letter-spacing:0.1em;">ADMIN</div>
+        <div onclick="navigate('admin-dashboard')" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+          ${getLogoIcon(32)}
+          <div style="line-height:1; margin-left:4px;">
+            <div style="font-weight:800; font-size:15px; background:linear-gradient(135deg,#f97316,#f59e0b); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">QUAD</div>
+            <div style="font-size:8px; color:#4b5563; letter-spacing:0.1em;">ADMIN</div>
+          </div>
+          <span style="background:linear-gradient(135deg,#e83a00,#f59e0b); color:white; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:700;">ADMIN</span>
         </div>
-        <span style="background:linear-gradient(135deg,#e83a00,#f59e0b); color:white; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:700;">ADMIN</span>
       </div>
       <div style="display:flex; align-items:center; gap:8px;">
         <div style="display:flex; align-items:center; gap:7px;">
