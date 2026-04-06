@@ -1356,9 +1356,7 @@ async function renderNews() {
             <i class="fas fa-newspaper" style="color:var(--brand-orange);"></i>
             실시간 뉴스 &amp; 종목 추천
           </h1>
-          <p style="color:#6b7280; font-size:12px; margin-top:4px;">
-            네이버 뉴스 API · Google 뉴스 RSS 실시간 연동
-          </p>
+
         </div>
         <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
           <!-- 자동갱신 표시 -->
@@ -1605,28 +1603,13 @@ async function loadNewsList(query = '', silent = false, category = 'all', isSear
       } catch(_) {}
     }
 
-    const newsSource = res.source || (isMock ? 'mock' : 'google')
-    const sourceLabel = newsSource === 'naver' ? '네이버 뉴스' : newsSource === 'google' ? 'Google 뉴스' : '샘플 데이터'
-    const sourceColor = newsSource === 'naver' ? '#03c75a' : newsSource === 'google' ? '#4285f4' : '#f59e0b'
-    const sourceBg    = newsSource === 'naver' ? 'rgba(3,199,90,0.08)' : newsSource === 'google' ? 'rgba(66,133,244,0.08)' : 'rgba(245,158,11,0.07)'
-    const sourceBorder= newsSource === 'naver' ? 'rgba(3,199,90,0.2)'  : newsSource === 'google' ? 'rgba(66,133,244,0.2)'  : 'rgba(245,158,11,0.18)'
-    const sourceIcon  = newsSource === 'naver' ? 'fa-n' : newsSource === 'google' ? 'fa-google' : 'fa-satellite-dish'
-    const sourceDesc  = newsSource === 'google' ? 'Google 뉴스 RSS 실시간' : newsSource === 'naver' ? '네이버 Open API 연동' : '샘플 데이터'
-
     // 현재 탭 레이블
     const tabLabels = { all:'전체', kospi:'KOSPI', kosdaq:'KOSDAQ', bio:'바이오', semi:'반도체·AI', bat:'2차전지', robot:'로봇' }
     const tabLabel = tabLabels[category] || '전체'
 
     list.innerHTML = `
-      <!-- 뉴스 소스 배너 -->
-      <div style="background:${sourceBg}; border:1px solid ${sourceBorder}; border-radius:10px; padding:9px 14px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-        <div style="display:flex; align-items:center; gap:7px;">
-          <i class="fab ${sourceIcon}" style="color:${sourceColor}; font-size:13px;"></i>
-          <span style="font-size:12px; color:${sourceColor}; font-weight:600;">${sourceLabel}</span>
-          <span style="font-size:11px; color:#6b7280;">${sourceDesc}</span>
-          ${category !== 'all' ? `<span style="font-size:10px; color:#9ca3af; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:4px; padding:1px 6px;">${tabLabel} 필터</span>` : ''}
-        </div>
-        <span style="font-size:11px; color:#4b5563; white-space:nowrap;">${news.length}건</span>
+      <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+        <span style="font-size:11px; color:#4b5563;">${news.length}건</span>
       </div>
 
       <div style="display:flex; flex-direction:column; gap:10px;">
@@ -1646,10 +1629,9 @@ async function loadNewsList(query = '', silent = false, category = 'all', isSear
           <div class="news-card" style="animation:fadeInUp 0.3s ease both; animation-delay:${Math.min(idx * 0.03, 0.5)}s;"
             onclick="openNewsLink('${newsLink}')">
 
-            <!-- 출처 + 카테고리 배지 + 시각 -->
+            <!-- 카테고리 배지 + 시각 -->
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; gap:6px;">
               <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap; flex:1; min-width:0;">
-                ${n.source ? `<span style="font-size:10px; font-weight:600; color:${sourceColor}; background:${sourceBg}; border:1px solid ${sourceBorder}; border-radius:4px; padding:1px 6px; white-space:nowrap;">${n.source}</span>` : ''}
                 ${idx < 3 ? `<span style="font-size:9px; font-weight:700; color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:4px; padding:1px 5px;">NEW</span>` : ''}
                 ${catBadges}
               </div>
@@ -1723,7 +1705,7 @@ async function loadNewsList(query = '', silent = false, category = 'all', isSear
     `
 
     const lu = document.getElementById('last-updated')
-    if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')} · ${sourceLabel}`
+    if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')}`
 
     // 시간 실시간 업데이트 시작
     startNewsTimeUpdater()
