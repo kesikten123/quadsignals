@@ -333,41 +333,11 @@ async function fetchGoogleNewsSingle(query: string, display: number = 20): Promi
   }
 }
 
-// Google News RSS로 뉴스 가져오기 (부족하면 보조 쿼리로 보완)
+// Google News RSS로 뉴스 가져오기
 async function fetchGoogleNews(query: string, display: number = 20): Promise<any[]> {
   try {
-    // 1차: 요청 쿼리로 호출
     const items = await fetchGoogleNewsSingle(query, display)
-    if (items.length >= display * 0.6) return items   // 60% 이상이면 바로 반환
-
-    // 2차: 부족하면 쿼리를 2개 키워드로 분리해 병렬 보완
-    const words = query.split(/\s+/).filter(w => w.length > 1)
-    const subQueries: string[] = []
-    // 앞 2단어, 뒤 2단어로 분할해서 추가
-    if (words.length >= 3) {
-      subQueries.push(words.slice(0, 2).join(' '))
-      subQueries.push(words.slice(-2).join(' '))
-    }
-    // 쿼리에 포함되지 않은 범용 보조 쿼리
-    if (!query.includes('주식')) subQueries.push('주식 증시')
-
-    const extras = await Promise.allSettled(
-      subQueries.map(q => fetchGoogleNewsSingle(q, 10))
-    )
-
-    const seen = new Set(items.map((i: any) => i.title))
-    for (const r of extras) {
-      if (r.status === 'fulfilled') {
-        for (const item of r.value) {
-          if (!seen.has(item.title)) {
-            seen.add(item.title)
-            items.push(item)
-          }
-        }
-      }
-    }
-
-    return items.slice(0, display)
+    return items
   } catch (e) {
     console.error('fetchGoogleNews error:', e)
     return []
@@ -408,15 +378,16 @@ async function fetchNaverNews(clientId: string, clientSecret: string, query: str
   }
 }
 
-// 카테고리별 전용 RSS 검색 쿼리 (서버에서 카테고리에 맞는 쿼리로 직접 호출)
+// 카테고리별 전용 RSS 검색 쿼리
+// 짧고 단순한 쿼리가 Google RSS에서 최신 뉴스를 더 잘 반환함
 const CATEGORY_QUERIES: Record<string, string> = {
-  all:    '주식 코스피 코스닥 증시',
-  kospi:  'KOSPI 코스피 주식 삼성전자 SK하이닉스',
-  kosdaq: 'KOSDAQ 코스닥 주식 에코프로 HLB 알테오젠',
-  bio:    '바이오 제약 신약 임상시험 의료 항체 치료제',
-  semi:   '반도체 AI HBM 파운드리 삼성전자 SK하이닉스',
-  bat:    '2차전지 배터리 전기차 이차전지 에코프로 LG에너지',
-  robot:  '로봇 AI로봇 협동로봇 자동화 레인보우로보틱스',
+  all:    '주식 증시',
+  kospi:  '코스피 주가',
+  kosdaq: '코스닥 주가',
+  bio:    '바이오 주가',
+  semi:   '반도체 주가',
+  bat:    '배터리 주가',
+  robot:  '로봇 주식',
 }
 
 // 뉴스 아이템 정규화 공통 함수
@@ -471,8 +442,7 @@ newsRoutes.get('/', async (c) => {
       )
       if (!naverResult.success) {
         console.warn('[News] Naver API failed →', naverResult.errorMsg)
-      }
-      if (naverResult.success && naverResult.items.length > 0) {
+      } else if (naverResult.items.length > 0) {
         const news = naverResult.items.map((item: any, idx: number) =>
           normalizeNewsItem(item, idx, 'NAVER뉴스')
         )
@@ -480,8 +450,10 @@ newsRoutes.get('/', async (c) => {
       }
     }
 
-    // 2. Google News RSS (카테고리 전용 쿼리로 직접 호출 → 필터링 불필요)
+    // 2. Google News RSS 폴백
+    console.log(`[News] Google RSS 호출: category=${category}, query="${effectiveQuery}"`)
     const googleItems = await fetchGoogleNews(effectiveQuery, display)
+    console.log(`[News] Google RSS 결과: ${googleItems.length}건`)
     if (googleItems.length > 0) {
       const news = googleItems.map((item: any, idx: number) =>
         normalizeNewsItem(item, idx, item.source || 'Google뉴스')
@@ -490,6 +462,7 @@ newsRoutes.get('/', async (c) => {
     }
 
     // 3. 모두 실패 → Mock
+    console.warn('[News] Google RSS도 실패 → Mock 반환')
     const mock = getMockNews()
     return c.json({ success: true, news: mock, isMock: true, source: 'mock', total: mock.length })
 
