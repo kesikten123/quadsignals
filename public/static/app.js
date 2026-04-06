@@ -1460,10 +1460,11 @@ async function renderNews() {
 
   // 초기 카테고리 상태 초기화
   window._currentNewsCategory = 'all'
-  window._currentNewsQuery = '주식 코스피 코스닥 증시'
+  window._currentNewsQuery = ''
+  window._currentIsSearch = false
 
   await Promise.all([
-    loadNewsList('주식 코스피 코스닥 증시', false, 'all'),
+    loadNewsList('', false, 'all', false),
     loadRecommendPanel()
   ])
 
@@ -1485,11 +1486,12 @@ async function renderNews() {
 
     if (newsCountdown <= 0) {
       newsCountdown = 30
-      const query    = window._currentNewsQuery    || '주식 코스피 코스닥 증시'
+      const query    = window._currentNewsQuery    || ''
       const category = window._currentNewsCategory || 'all'
+      const isSearch = window._currentIsSearch     || false
       try {
         await Promise.all([
-          loadNewsList(query, true, category),
+          loadNewsList(query, true, category, isSearch),
           loadRecommendPanel(true)
         ])
         const lu = document.getElementById('last-updated')
@@ -1522,8 +1524,9 @@ function applyNewsLayout() {
   }
 }
 
-window._currentNewsQuery = '주식 코스피 코스닥'
+window._currentNewsQuery = ''
 window._currentNewsTab   = 'all'
+window._currentIsSearch  = false
 
 // 탭별 API 쿼리 및 카테고리 매핑
 const NEWS_TAB_CONFIG = {
@@ -1543,9 +1546,10 @@ async function switchNewsTab(tab, query) {
   })
   window._currentNewsTab   = tab
   const config = NEWS_TAB_CONFIG[tab] || NEWS_TAB_CONFIG.all
-  window._currentNewsQuery = config.query
+  window._currentNewsQuery = ''
   window._currentNewsCategory = config.category
-  await loadNewsList(config.query, false, config.category)
+  window._currentIsSearch = false
+  await loadNewsList('', false, config.category, false)
 }
 
 async function searchNews() {
@@ -1553,26 +1557,28 @@ async function searchNews() {
   if (!q) return
   window._currentNewsQuery = q
   window._currentNewsCategory = 'all'
+  window._currentIsSearch = true
   ;['all','kospi','kosdaq','bio','semi','bat','robot'].forEach(t => {
     const el = document.getElementById(`ntab-${t}`)
     if (el) el.classList.remove('active')
   })
-  await loadNewsList(q, false, 'all')
+  await loadNewsList(q, false, 'all', true)
 }
 
 async function manualRefreshNews() {
   newsCountdown = 30
   const el = document.getElementById('refresh-countdown')
   if (el) el.textContent = '30초'
-  const query = window._currentNewsQuery || '주식 코스피 코스닥'
+  const query = window._currentNewsQuery || ''
   const category = window._currentNewsCategory || 'all'
+  const isSearch = window._currentIsSearch || false
   await Promise.all([
-    loadNewsList(query, false, category),
+    loadNewsList(query, false, category, isSearch),
     loadRecommendPanel()
   ])
 }
 
-async function loadNewsList(query = '주식 코스피 코스닥', silent = false, category = 'all') {
+async function loadNewsList(query = '', silent = false, category = 'all', isSearch = false) {
   const list = document.getElementById('news-list')
   if (!list) return
 
@@ -1581,7 +1587,9 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
   }
 
   try {
-    const res = await api.get(`/news?query=${encodeURIComponent(query)}&display=25&category=${encodeURIComponent(category)}`)
+    // 검색 시에만 query+isSearch=1 전송, 탭 전환/자동갱신은 category만 전송
+    const searchParam = isSearch && query ? `&query=${encodeURIComponent(query)}&isSearch=1` : ''
+    const res = await api.get(`/news?category=${encodeURIComponent(category)}&display=25${searchParam}`)
     const news   = res.success ? res.news : []
     const isMock = res.isMock
 

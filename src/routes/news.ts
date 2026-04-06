@@ -333,34 +333,37 @@ async function fetchGoogleNewsSingle(query: string, display: number = 20): Promi
   }
 }
 
-// Google News RSS로 뉴스 가져오기 (카테고리별 다중 쿼리 병렬)
+// Google News RSS로 뉴스 가져오기 (부족하면 보조 쿼리로 보완)
 async function fetchGoogleNews(query: string, display: number = 20): Promise<any[]> {
   try {
-    // 단일 쿼리로 먼저 시도
+    // 1차: 요청 쿼리로 호출
     const items = await fetchGoogleNewsSingle(query, display)
-    if (items.length >= 10) return items
+    if (items.length >= display * 0.6) return items   // 60% 이상이면 바로 반환
 
-    // 결과가 부족하면 서브 쿼리 병렬 보완
-    const subQueries = [
-      '코스피 코스닥 증시 주식',
-      '삼성전자 SK하이닉스 반도체',
-      '바이오 2차전지 로봇 주가',
-    ]
-    const results = await Promise.allSettled(
+    // 2차: 부족하면 쿼리를 2개 키워드로 분리해 병렬 보완
+    const words = query.split(/\s+/).filter(w => w.length > 1)
+    const subQueries: string[] = []
+    // 앞 2단어, 뒤 2단어로 분할해서 추가
+    if (words.length >= 3) {
+      subQueries.push(words.slice(0, 2).join(' '))
+      subQueries.push(words.slice(-2).join(' '))
+    }
+    // 쿼리에 포함되지 않은 범용 보조 쿼리
+    if (!query.includes('주식')) subQueries.push('주식 증시')
+
+    const extras = await Promise.allSettled(
       subQueries.map(q => fetchGoogleNewsSingle(q, 10))
     )
 
-    const extra: any[] = []
-    for (const r of results) {
-      if (r.status === 'fulfilled') extra.push(...r.value)
-    }
-
-    // 중복 제거 (title 기준)
     const seen = new Set(items.map((i: any) => i.title))
-    for (const item of extra) {
-      if (!seen.has(item.title)) {
-        seen.add(item.title)
-        items.push(item)
+    for (const r of extras) {
+      if (r.status === 'fulfilled') {
+        for (const item of r.value) {
+          if (!seen.has(item.title)) {
+            seen.add(item.title)
+            items.push(item)
+          }
+        }
       }
     }
 
@@ -405,97 +408,95 @@ async function fetchNaverNews(clientId: string, clientSecret: string, query: str
   }
 }
 
+// 카테고리별 전용 RSS 검색 쿼리 (서버에서 카테고리에 맞는 쿼리로 직접 호출)
+const CATEGORY_QUERIES: Record<string, string> = {
+  all:    '주식 코스피 코스닥 증시',
+  kospi:  'KOSPI 코스피 주식 삼성전자 SK하이닉스',
+  kosdaq: 'KOSDAQ 코스닥 주식 에코프로 HLB 알테오젠',
+  bio:    '바이오 제약 신약 임상시험 의료 항체 치료제',
+  semi:   '반도체 AI HBM 파운드리 삼성전자 SK하이닉스',
+  bat:    '2차전지 배터리 전기차 이차전지 에코프로 LG에너지',
+  robot:  '로봇 AI로봇 협동로봇 자동화 레인보우로보틱스',
+}
+
+// 뉴스 아이템 정규화 공통 함수
+function normalizeNewsItem(item: any, idx: number, sourceName: string): any {
+  const rawTitle = item.title || ''
+  const rawDesc  = item.description || item.summary || ''
+  const title = rawTitle.replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/&quot;/g,'"').replace(/&#039;/g,"'").trim()
+  const description = rawDesc.replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/&quot;/g,'"').replace(/&#039;/g,"'").trim()
+
+  const text = title + ' ' + description
+  const relatedStocks = findRelatedStocks(text)
+  const categories    = classifyNewsCategory(text)
+
+  return {
+    id:            item.id || item.link ? btoa(encodeURIComponent(item.link || String(idx))).substring(0, 20) : `n_${Date.now()}_${idx}`,
+    title,
+    description:   description || title,
+    link:          item.link   || item.url || '',
+    pubDate:       item.pubDate || item.publishedAt || new Date().toISOString(),
+    relatedStocks,
+    categories,
+    source:        item.source || sourceName,
+  }
+}
+
 // 메인 뉴스 API 엔드포인트
 newsRoutes.get('/', async (c) => {
   try {
-    const query = c.req.query('query') || '주식 코스피 코스닥'
-    const display = parseInt(c.req.query('display') || '20')
-    const start = parseInt(c.req.query('start') || '1')
-
-    let newsItems: any[] = []
-    let isMock = false
-    let source = 'google' // 기본: Google News RSS
-
-    // 카테고리 필터 파라미터
     const category = c.req.query('category') || 'all'
+    const display  = Math.min(parseInt(c.req.query('display') || '25'), 50)
 
-    // 1. 네이버 API 우선 시도 (API 키가 있고 유효한 경우)
+    // 카테고리에 맞는 최적 쿼리 선택
+    const searchQuery = c.req.query('query') || ''
+    // isSearch=1 파라미터가 있을 때만 사용자 검색어 사용
+    // 그 외(탭 전환, 자동 새로고침)는 항상 카테고리 전용 쿼리 사용
+    const isSearch = c.req.query('isSearch') === '1'
+    const effectiveQuery = (isSearch && searchQuery)
+      ? searchQuery
+      : (CATEGORY_QUERIES[category] || CATEGORY_QUERIES['all'])
+
+    // 1. 네이버 API 우선 시도
     if (c.env.NAVER_CLIENT_ID && c.env.NAVER_CLIENT_SECRET) {
       const naverResult = await fetchNaverNews(
         c.env.NAVER_CLIENT_ID,
         c.env.NAVER_CLIENT_SECRET,
-        query,
+        effectiveQuery,
         display
       )
-      
       if (!naverResult.success) {
-        console.warn('[News] Naver API failed, falling back to Google RSS. Error:', naverResult.errorMsg)
+        console.warn('[News] Naver API failed →', naverResult.errorMsg)
       }
-
       if (naverResult.success && naverResult.items.length > 0) {
-        // 네이버 API 성공
-        let newsWithStocks = naverResult.items.map((item: any) => {
-          const rawText = item.title + ' ' + item.description
-          const cleanText = rawText.replace(/<[^>]*>/g, '')
-          const relatedStocks = findRelatedStocks(cleanText)
-          const categories = classifyNewsCategory(cleanText)
-          
-          return {
-            id: btoa(item.link).substring(0, 20),
-            title: item.title.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#039;/g,"'"),
-            description: item.description.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>'),
-            link: item.link,
-            pubDate: item.pubDate,
-            relatedStocks,
-            categories,
-            source: 'NAVER뉴스'
-          }
-        })
-        
-        // 카테고리 필터 적용
-        if (category !== 'all') {
-          newsWithStocks = newsWithStocks.filter((n: any) => n.categories.includes(category))
-        }
-        
-        return c.json({ success: true, news: newsWithStocks, isMock: false, source: 'naver', total: newsWithStocks.length })
+        const news = naverResult.items.map((item: any, idx: number) =>
+          normalizeNewsItem(item, idx, 'NAVER뉴스')
+        )
+        return c.json({ success: true, news, isMock: false, source: 'naver', total: news.length })
       }
     }
 
-    // 2. Google News RSS 사용 (네이버 실패 또는 키 없음)
-    const googleItems = await fetchGoogleNews(query, display)
-    
+    // 2. Google News RSS (카테고리 전용 쿼리로 직접 호출 → 필터링 불필요)
+    const googleItems = await fetchGoogleNews(effectiveQuery, display)
     if (googleItems.length > 0) {
-      let newsWithStocks = googleItems.map((item: any, idx: number) => {
-        const text = item.title + ' ' + (item.description || '')
-        const relatedStocks = findRelatedStocks(text)
-        const categories = classifyNewsCategory(text)
-        
-        return {
-          id: `g_${Date.now()}_${idx}`,
-          title: item.title,
-          description: item.description || item.title,
-          link: item.link,
-          pubDate: item.pubDate,
-          relatedStocks,
-          categories,
-          source: item.source || 'Google뉴스'
-        }
-      })
-      
-      // 카테고리 필터 적용
-      if (category !== 'all') {
-        newsWithStocks = newsWithStocks.filter((n: any) => n.categories.includes(category))
-      }
-      
-      return c.json({ success: true, news: newsWithStocks, isMock: false, source: 'google', total: newsWithStocks.length })
+      const news = googleItems.map((item: any, idx: number) =>
+        normalizeNewsItem(item, idx, item.source || 'Google뉴스')
+      )
+      return c.json({ success: true, news, isMock: false, source: 'google', total: news.length })
     }
 
-    // 3. 모든 소스 실패 시 Mock 데이터
-    return c.json({ success: true, news: getMockNews(), isMock: true, source: 'mock', total: getMockNews().length })
-    
+    // 3. 모두 실패 → Mock
+    const mock = getMockNews()
+    return c.json({ success: true, news: mock, isMock: true, source: 'mock', total: mock.length })
+
   } catch (error) {
     console.error('News error:', error)
-    return c.json({ success: true, news: getMockNews(), isMock: true, source: 'mock' })
+    const mock = getMockNews()
+    return c.json({ success: true, news: mock, isMock: true, source: 'mock', total: mock.length })
   }
 })
 
