@@ -344,10 +344,9 @@ async function fetchGoogleNews(query: string, display: number = 20): Promise<any
   }
 }
 
-// 네이버 뉴스 API 시도
+// 네이버 뉴스 API - 단일 쿼리
 async function fetchNaverNews(clientId: string, clientSecret: string, query: string, display: number = 20): Promise<{ items: any[]; success: boolean; errorMsg?: string }> {
   try {
-    // 네이버 API는 한 번에 최대 100개까지 가능
     const safeDisplay = Math.min(display, 100)
     const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${safeDisplay}&start=1&sort=date`
     
@@ -378,8 +377,66 @@ async function fetchNaverNews(clientId: string, clientSecret: string, query: str
   }
 }
 
-// 카테고리별 전용 RSS 검색 쿼리
-// 짧고 단순한 쿼리가 Google RSS에서 최신 뉴스를 더 잘 반환함
+// 네이버 뉴스 API - 카테고리 복수 쿼리 병렬 호출 (중복 제거 + 최신순 정렬)
+async function fetchNaverNewsMulti(
+  clientId: string,
+  clientSecret: string,
+  category: string,
+  display: number = 25
+): Promise<{ items: any[]; success: boolean; errorMsg?: string }> {
+  const queries = CATEGORY_MULTI_QUERIES[category] || CATEGORY_MULTI_QUERIES['all']
+  // 쿼리당 가져올 개수 (총 display 이상 확보하도록 넉넉하게)
+  const perQuery = Math.min(Math.ceil(display * 1.5), 100)
+
+  try {
+    const results = await Promise.allSettled(
+      queries.map(q => fetchNaverNews(clientId, clientSecret, q, perQuery))
+    )
+
+    // 성공한 결과만 수집
+    const allItems: any[] = []
+    let anySuccess = false
+    let lastError: string | undefined
+
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        if (r.value.success) {
+          anySuccess = true
+          allItems.push(...r.value.items)
+        } else {
+          lastError = r.value.errorMsg
+        }
+      }
+    }
+
+    if (!anySuccess) {
+      return { items: [], success: false, errorMsg: lastError }
+    }
+
+    // 제목 기준 중복 제거
+    const seen = new Set<string>()
+    const unique = allItems.filter(item => {
+      const key = (item.title || '').replace(/<[^>]*>/g, '').trim().slice(0, 40)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    // 최신순 정렬 (pubDate 내림차순)
+    unique.sort((a, b) => {
+      const da = new Date(a.pubDate || 0).getTime()
+      const db = new Date(b.pubDate || 0).getTime()
+      return db - da
+    })
+
+    return { items: unique.slice(0, display), success: true }
+  } catch (e: any) {
+    console.error('[NaverMulti] exception:', e?.message)
+    return { items: [], success: false, errorMsg: e?.message }
+  }
+}
+
+// 카테고리별 전용 RSS 검색 쿼리 (Google RSS 폴백용 단일 쿼리)
 const CATEGORY_QUERIES: Record<string, string> = {
   all:    '주식 증시',
   kospi:  '코스피 주가',
@@ -388,6 +445,17 @@ const CATEGORY_QUERIES: Record<string, string> = {
   semi:   '반도체 주가',
   bat:    '배터리 주가',
   robot:  '로봇 주식',
+}
+
+// 카테고리별 네이버 API 복수 쿼리 (병렬 호출로 다양한 최신 뉴스 수집)
+const CATEGORY_MULTI_QUERIES: Record<string, string[]> = {
+  all:    ['코스피 코스닥 주식', '증시 주가 오늘', '국내 주식 시장'],
+  kospi:  ['코스피 주가', '삼성전자 SK하이닉스 주가', '코스피 대형주 시황'],
+  kosdaq: ['코스닥 주가', '코스닥 기술주 시황', '코스닥 중소형주'],
+  bio:    ['바이오 제약 주가', '신약 임상 바이오텍', '제약 바이오 코스닥'],
+  semi:   ['반도체 주가 시황', 'AI 반도체 HBM 주가', '삼성전자 SK하이닉스 반도체'],
+  bat:    ['2차전지 배터리 주가', '이차전지 에코프로 주가', 'LG에너지솔루션 삼성SDI 배터리'],
+  robot:  ['로봇 주가 시황', '협동로봇 휴머노이드 주식', '레인보우로보틱스 로봇주'],
 }
 
 // 뉴스 아이템 정규화 공통 함수
@@ -434,12 +502,11 @@ newsRoutes.get('/', async (c) => {
 
     // 1. 네이버 API 우선 시도
     if (c.env.NAVER_CLIENT_ID && c.env.NAVER_CLIENT_SECRET) {
-      const naverResult = await fetchNaverNews(
-        c.env.NAVER_CLIENT_ID,
-        c.env.NAVER_CLIENT_SECRET,
-        effectiveQuery,
-        display
-      )
+      // 검색(isSearch)이면 단일 쿼리, 탭/자동갱신이면 카테고리별 복수 쿼리 병렬 호출
+      const naverResult = isSearch
+        ? await fetchNaverNews(c.env.NAVER_CLIENT_ID, c.env.NAVER_CLIENT_SECRET, effectiveQuery, display)
+        : await fetchNaverNewsMulti(c.env.NAVER_CLIENT_ID, c.env.NAVER_CLIENT_SECRET, category, display)
+
       if (!naverResult.success) {
         console.warn('[News] Naver API failed →', naverResult.errorMsg)
       } else if (naverResult.items.length > 0) {
