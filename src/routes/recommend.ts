@@ -145,44 +145,57 @@ function calcSignal(stock: any, dbSignals: any[]): { signal: string; strength: n
     }
   }
 
-  let score = 50
+  // ── 기본 점수: 45 (중립 하향 → 기본적으로 보수적)
+  let score = 45
   const cr = stock.changeRate
-  if (cr >= 8)       score += 40
-  else if (cr >= 5)  score += 30
-  else if (cr >= 3)  score += 22
-  else if (cr >= 1.5)score += 14
-  else if (cr >= 0.5)score += 7
-  else if (cr >= 0)  score += 3
-  else if (cr >= -1) score -= 5
-  else if (cr >= -2) score -= 12
-  else if (cr >= -3) score -= 20
-  else               score -= 30
 
-  if (stock.volume > 3000000) score += 8
-  else if (stock.volume > 1000000) score += 4
-  else if (stock.volume < 200000) score -= 5
+  // ── 등락률 가산/감산
+  // 상승 폭 축소: 단순 당일 등락률만으로 높은 점수 방지
+  // 하락 페널티 강화: SELL 시그널이 실제로 발생하도록
+  if      (cr >= 8)    score += 30   // 급등:  75 → BUY
+  else if (cr >= 5)    score += 23   // 강세:  68 → BUY (기존 80 → 68로 하향)
+  else if (cr >= 3)    score += 15   // 상승:  60 → HOLD (기존 72 → 60)
+  else if (cr >= 1.5)  score += 8    // 소폭:  53 → HOLD
+  else if (cr >= 0.5)  score += 3    // 보합+: 48 → HOLD
+  else if (cr >= 0)    score += 1    // 보합:  46 → HOLD
+  else if (cr >= -1)   score -= 7    // 약보합: 38 → SELL 경계
+  else if (cr >= -2)   score -= 15   // 하락:  30 → SELL
+  else if (cr >= -3)   score -= 23   // 급락:  22 → SELL
+  else                 score -= 33   // 대폭락: 12 → 강한 SELL
 
-  score = Math.min(100, Math.max(5, score))
+  // ── 거래량 보정 (가산 완화, 패널티 유지)
+  if      (stock.volume > 3000000)  score += 5   // 대량: +5
+  else if (stock.volume > 1000000)  score += 2   // 보통: +2
+  else if (stock.volume < 200000)   score -= 5   // 저량: -5
 
+  // ── 점수 범위 제한: 최대 85 (극단적 강도 표시 방지), 최소 5
+  score = Math.min(85, Math.max(5, score))
+
+  // ── 시그널 판정
+  //  BUY  >= 68: 기존 65 → 68 (BUY 진입 강화, +5%급 상승부터 BUY)
+  //  SELL <= 38: 기존 35 → 38 (SELL 범위 소폭 확대)
+  //  HOLD: 39~67 구간
   let signal = 'HOLD'
   let reason  = '관망 구간 - 추가 신호 대기'
-  if (score >= 65) { signal = 'BUY';  reason = '모멘텀 상승 + 거래량 증가 확인' }
-  if (score <= 35) { signal = 'SELL'; reason = '하락 추세 - 손절 라인 점검 필요' }
+  if (score >= 68) { signal = 'BUY';  reason = '상승 모멘텀 감지 - 거래량 병행 확인 권장' }
+  if (score <= 38) { signal = 'SELL'; reason = '하락 압력 우세 - 손절 라인 점검 권고' }
 
-  // 섹터별 특이사항 추가
-  if (stock.sector === '반도체' && score >= 60) reason = 'AI 수요 증가에 따른 반도체 업황 개선 기대'
-  if (stock.sector === '바이오' && cr >= 5)     reason = '임상/허가 기대감. 바이오 섹터 강세'
-  if (stock.sector === '2차전지소재' && cr >= 5) reason = '전기차 수요 회복, 2차전지 소재 강세'
-  if (stock.sector === '로봇' && cr >= 5)       reason = 'AI 로봇 수요 급증 - 로봇 섹터 선도주'
-  if (stock.sector === '방산' && cr >= 2)       reason = '방산 수출 호조 - 글로벌 수요 증가'
-  if (stock.sector === '조선' && cr >= 2)       reason = 'LNG선 수주 증가, 조선업 슈퍼사이클 기대'
+  // ── 섹터별 사유 보완 (보수적 문구 추가)
+  if (stock.sector === '반도체' && score >= 68) reason = 'AI 수요 기반 반도체 업황 개선 기대 (변동성 주의)'
+  if (stock.sector === '바이오' && cr >= 5)     reason = '임상·허가 기대감 반영 중 - 결과 발표 전 변동성 유의'
+  if (stock.sector === '2차전지소재' && cr >= 5) reason = '전기차 수요 회복 기대 - 단기 급등 후 조정 가능성 확인'
+  if (stock.sector === '로봇' && cr >= 5)       reason = 'AI 로봇 테마 강세 - 수급 쏠림 후 되돌림 주의'
+  if (stock.sector === '방산' && cr >= 3)       reason = '방산 수출 호조 - 지정학 리스크 완화 시 되돌림 주의'
+  if (stock.sector === '조선' && cr >= 3)       reason = 'LNG선 수주 기대 - 수주 확인 전까지 선취매 주의'
 
   return {
     signal,
     strength:    score,
     reason,
-    targetPrice: Math.round(stock.price * (signal === 'BUY' ? 1.15 : 0.94)),
-    stopLoss:    Math.round(stock.price * (signal === 'BUY' ? 0.92 : 1.06)),
+    // 목표가: BUY +10% / SELL -6% (기존 +15%에서 하향 → 현실적 단기 목표)
+    targetPrice: Math.round(stock.price * (signal === 'BUY' ? 1.10 : 0.94)),
+    // 손절가: BUY -6% / SELL +5% (기존 -8%에서 축소 → 손절 기준 보수화)
+    stopLoss:    Math.round(stock.price * (signal === 'BUY' ? 0.94 : 1.05)),
   }
 }
 
