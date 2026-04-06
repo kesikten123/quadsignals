@@ -305,27 +305,27 @@ function buildGoogleNewsQuery(query: string): string {
   return query
 }
 
-// Google News RSS로 뉴스 가져오기
-async function fetchGoogleNews(query: string, display: number = 20): Promise<any[]> {
+// Google News RSS로 뉴스 가져오기 (단일 쿼리)
+async function fetchGoogleNewsSingle(query: string, display: number = 20): Promise<any[]> {
   try {
     const q = buildGoogleNewsQuery(query)
     const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ko&gl=KR&ceid=KR:ko`
     
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; NewsBot/1.0)',
-        'Accept': 'application/rss+xml, application/xml, text/xml'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
       }
     })
     
     if (!response.ok) {
-      console.error('Google News RSS error:', response.status)
+      console.error('Google News RSS error:', response.status, 'query:', q)
       return []
     }
     
     const xmlText = await response.text()
     const items = parseRSS(xmlText)
-    
     return items.slice(0, display)
   } catch (e) {
     console.error('Google News fetch error:', e)
@@ -333,30 +333,75 @@ async function fetchGoogleNews(query: string, display: number = 20): Promise<any
   }
 }
 
-// 네이버 뉴스 API 시도
-async function fetchNaverNews(clientId: string, clientSecret: string, query: string, display: number = 20): Promise<{ items: any[]; success: boolean }> {
+// Google News RSS로 뉴스 가져오기 (카테고리별 다중 쿼리 병렬)
+async function fetchGoogleNews(query: string, display: number = 20): Promise<any[]> {
   try {
-    const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&start=1&sort=date`
+    // 단일 쿼리로 먼저 시도
+    const items = await fetchGoogleNewsSingle(query, display)
+    if (items.length >= 10) return items
+
+    // 결과가 부족하면 서브 쿼리 병렬 보완
+    const subQueries = [
+      '코스피 코스닥 증시 주식',
+      '삼성전자 SK하이닉스 반도체',
+      '바이오 2차전지 로봇 주가',
+    ]
+    const results = await Promise.allSettled(
+      subQueries.map(q => fetchGoogleNewsSingle(q, 10))
+    )
+
+    const extra: any[] = []
+    for (const r of results) {
+      if (r.status === 'fulfilled') extra.push(...r.value)
+    }
+
+    // 중복 제거 (title 기준)
+    const seen = new Set(items.map((i: any) => i.title))
+    for (const item of extra) {
+      if (!seen.has(item.title)) {
+        seen.add(item.title)
+        items.push(item)
+      }
+    }
+
+    return items.slice(0, display)
+  } catch (e) {
+    console.error('fetchGoogleNews error:', e)
+    return []
+  }
+}
+
+// 네이버 뉴스 API 시도
+async function fetchNaverNews(clientId: string, clientSecret: string, query: string, display: number = 20): Promise<{ items: any[]; success: boolean; errorMsg?: string }> {
+  try {
+    // 네이버 API는 한 번에 최대 100개까지 가능
+    const safeDisplay = Math.min(display, 100)
+    const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${safeDisplay}&start=1&sort=date`
     
     const response = await fetch(url, {
       headers: {
         'X-Naver-Client-Id': clientId,
         'X-Naver-Client-Secret': clientSecret,
+        'Accept': 'application/json',
       }
     })
     
     if (!response.ok) {
-      return { items: [], success: false }
+      const errText = await response.text().catch(() => '')
+      console.error(`[Naver] HTTP ${response.status}: ${errText}`)
+      return { items: [], success: false, errorMsg: `HTTP ${response.status}: ${errText}` }
     }
     
     const data = await response.json() as any
     if (data.errorCode) {
-      return { items: [], success: false }
+      console.error(`[Naver] API errorCode ${data.errorCode}: ${data.errorMessage}`)
+      return { items: [], success: false, errorMsg: `${data.errorCode}: ${data.errorMessage}` }
     }
     
     return { items: data.items || [], success: true }
-  } catch (e) {
-    return { items: [], success: false }
+  } catch (e: any) {
+    console.error('[Naver] fetch exception:', e?.message)
+    return { items: [], success: false, errorMsg: e?.message }
   }
 }
 
@@ -383,6 +428,10 @@ newsRoutes.get('/', async (c) => {
         display
       )
       
+      if (!naverResult.success) {
+        console.warn('[News] Naver API failed, falling back to Google RSS. Error:', naverResult.errorMsg)
+      }
+
       if (naverResult.success && naverResult.items.length > 0) {
         // 네이버 API 성공
         let newsWithStocks = naverResult.items.map((item: any) => {

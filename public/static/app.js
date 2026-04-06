@@ -66,6 +66,12 @@ function showToast(message, type = 'success') {
 // Router
 // ============================================================
 async function navigate(page, params = {}) {
+  // ── 페이지 이탈 시 뉴스 타이머 정리 ──
+  if (page !== 'news') {
+    if (newsRefreshTimer)    { clearInterval(newsRefreshTimer);    newsRefreshTimer = null }
+    if (newsTimeUpdateTimer) { clearInterval(newsTimeUpdateTimer); newsTimeUpdateTimer = null }
+  }
+
   currentPage = page
   const app = document.getElementById('app')
   
@@ -1351,7 +1357,7 @@ async function renderNews() {
             실시간 뉴스 &amp; 종목 추천
           </h1>
           <p style="color:#6b7280; font-size:12px; margin-top:4px;">
-            Google 뉴스 RSS 실시간 연동
+            네이버 뉴스 API · Google 뉴스 RSS 실시간 연동
           </p>
         </div>
         <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
@@ -1462,7 +1468,17 @@ async function renderNews() {
   ])
 
   newsCountdown = 30
+  // 기존 타이머가 남아있으면 반드시 정리 후 재시작
+  if (newsRefreshTimer) { clearInterval(newsRefreshTimer); newsRefreshTimer = null }
+
   newsRefreshTimer = setInterval(async () => {
+    // 뉴스 페이지에서 이탈했으면 타이머 자동 종료
+    if (currentPage !== 'news') {
+      clearInterval(newsRefreshTimer)
+      newsRefreshTimer = null
+      return
+    }
+
     newsCountdown--
     const el = document.getElementById('refresh-countdown')
     if (el) el.textContent = `${newsCountdown}초`
@@ -1471,12 +1487,17 @@ async function renderNews() {
       newsCountdown = 30
       const query    = window._currentNewsQuery    || '주식 코스피 코스닥 증시'
       const category = window._currentNewsCategory || 'all'
-      await Promise.all([
-        loadNewsList(query, true, category),
-        loadRecommendPanel(true)
-      ])
-      const lu = document.getElementById('last-updated')
-      if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')}`
+      try {
+        await Promise.all([
+          loadNewsList(query, true, category),
+          loadRecommendPanel(true)
+        ])
+        const lu = document.getElementById('last-updated')
+        if (lu) lu.textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')}`
+      } catch(e) {
+        console.warn('[News] 자동갱신 오류, 10초 후 재시도:', e)
+        newsCountdown = 10  // 오류 시 10초 후 재시도
+      }
     }
   }, 1000)
 }
@@ -1700,7 +1721,20 @@ async function loadNewsList(query = '주식 코스피 코스닥', silent = false
     startNewsTimeUpdater()
 
   } catch (err) {
-    list.innerHTML = '<div style="color:#ef4444; padding:20px; text-align:center;">뉴스 로드 실패 — 잠시 후 자동 재시도합니다</div>'
+    console.error('[News] loadNewsList 오류:', err)
+    if (!silent) {
+      list.innerHTML = `
+        <div style="text-align:center; padding:40px;">
+          <i class="fas fa-exclamation-triangle" style="font-size:32px; color:#ef4444; display:block; margin-bottom:12px;"></i>
+          <div style="color:#ef4444; font-size:14px; margin-bottom:8px;">뉴스 로드에 실패했습니다</div>
+          <div style="color:#6b7280; font-size:12px; margin-bottom:16px;">네트워크 상태를 확인하거나 잠시 후 다시 시도하세요</div>
+          <button onclick="manualRefreshNews()" style="background:rgba(249,115,22,0.1); border:1px solid rgba(249,115,22,0.3); color:var(--brand-orange); padding:8px 20px; border-radius:8px; cursor:pointer; font-size:13px;">
+            <i class="fas fa-redo" style="margin-right:6px;"></i>다시 시도
+          </button>
+        </div>`
+    }
+    // 오류 발생 시 카운트다운을 15초로 단축해 빠르게 재시도
+    newsCountdown = 15
   }
 }
 
