@@ -387,85 +387,63 @@ async function fetchAllStocksFromKiwoom(
   secretKey: string,
   market: 'KOSPI' | 'KOSDAQ' | 'ALL'
 ): Promise<{ stocks: any[]; source: string }> {
-  if (!appKey || !secretKey) {
-    return { stocks: getFallbackData(market), source: 'fallback' }
-  }
+  // ① 키움 API 시도
+  if (appKey && secretKey) {
+    const token = await getKiwoomToken(appKey, secretKey)
+    if (token) {
+      const allStocks: any[] = []
+      const markets: Array<{ mktTp: string; listTp: string; label: 'KOSPI' | 'KOSDAQ' }> =
+        market === 'KOSPI'  ? [{ mktTp: '001', listTp: '0',  label: 'KOSPI'  }] :
+        market === 'KOSDAQ' ? [{ mktTp: '101', listTp: '10', label: 'KOSDAQ' }] :
+        [
+          { mktTp: '001', listTp: '0',  label: 'KOSPI'  },
+          { mktTp: '101', listTp: '10', label: 'KOSDAQ' },
+        ]
 
-  const token = await getKiwoomToken(appKey, secretKey)
-  if (!token) {
-    return { stocks: getFallbackData(market), source: 'fallback' }
-  }
-
-  const allStocks: any[] = []
-  // ka10027 mrkt_tp: 001=코스피, 101=코스닥
-  const markets: Array<{ mktTp: string; listTp: string; label: 'KOSPI' | 'KOSDAQ' }> =
-    market === 'KOSPI'  ? [{ mktTp: '001', listTp: '0',  label: 'KOSPI'  }] :
-    market === 'KOSDAQ' ? [{ mktTp: '101', listTp: '10', label: 'KOSDAQ' }] :
-    [
-      { mktTp: '001', listTp: '0',  label: 'KOSPI'  },
-      { mktTp: '101', listTp: '10', label: 'KOSDAQ' },
-    ]
-
-  for (const { mktTp, listTp, label } of markets) {
-    let items: any[] = []
-
-    // ① ka10027 등락률상위 (상승/하락/보합/거래량상위 4방향 병렬)
-    const [risingItems, fallingItems, stableItems] = await Promise.all([
-      fetchKiwoomRankingBySortTp(token, mktTp, '1'),   // 상승률
-      fetchKiwoomRankingBySortTp(token, mktTp, '3'),   // 하락률
-      fetchKiwoomRankingBySortTp(token, mktTp, '5'),   // 보합(거래량 기준)
-    ])
-
-    // 중복 제거 병합
-    const seenCodes = new Set<string>()
-    for (const arr of [risingItems, fallingItems, stableItems]) {
-      for (const s of arr) {
-        if (!seenCodes.has(s.code)) {
-          seenCodes.add(s.code)
-          items.push({ ...s, market: label })
-        }
-      }
-    }
-
-    // ② ka10027 부족하면 (100종목 미만) ka10099 전체 리스트 + ka10001 시세로 보완
-    if (items.length < 100) {
-      const stockList = await fetchKiwoomStockList(token, listTp)
-      // 아직 가져오지 못한 종목만 추가
-      const newCodes = stockList.filter(s => !seenCodes.has(s.code))
-      // 최대 500종목 시세 병렬 조회 (50개씩 배치)
-      const BATCH = 50
-      for (let i = 0; i < Math.min(newCodes.length, 500); i += BATCH) {
-        const batch = newCodes.slice(i, i + BATCH)
-        const results = await Promise.allSettled(
-          batch.map(s => fetchKiwoomStockInfo(token, s.code))
-        )
-        for (let j = 0; j < batch.length; j++) {
-          const r = results[j]
-          const info = r.status === 'fulfilled' ? r.value : null
-          if (info && info.price > 0) {
-            seenCodes.add(batch[j].code)
-            items.push({ ...batch[j], ...info, market: label })
+      for (const { mktTp, listTp, label } of markets) {
+        let items: any[] = []
+        const [risingItems, fallingItems, stableItems] = await Promise.all([
+          fetchKiwoomRankingBySortTp(token, mktTp, '1'),
+          fetchKiwoomRankingBySortTp(token, mktTp, '3'),
+          fetchKiwoomRankingBySortTp(token, mktTp, '5'),
+        ])
+        const seenCodes = new Set<string>()
+        for (const arr of [risingItems, fallingItems, stableItems]) {
+          for (const s of arr) {
+            if (!seenCodes.has(s.code)) { seenCodes.add(s.code); items.push({ ...s, market: label }) }
           }
         }
+        if (items.length < 100) {
+          const stockList = await fetchKiwoomStockList(token, listTp)
+          const newCodes = stockList.filter(s => !seenCodes.has(s.code))
+          const BATCH = 50
+          for (let i = 0; i < Math.min(newCodes.length, 500); i += BATCH) {
+            const batch = newCodes.slice(i, i + BATCH)
+            const results = await Promise.allSettled(batch.map(s => fetchKiwoomStockInfo(token, s.code)))
+            for (let j = 0; j < batch.length; j++) {
+              const r = results[j]
+              const info = r.status === 'fulfilled' ? r.value : null
+              if (info && info.price > 0) { seenCodes.add(batch[j].code); items.push({ ...batch[j], ...info, market: label }) }
+            }
+          }
+        }
+        if (items.length === 0) {
+          items = getFallbackData(label).map(s => ({ ...s }))
+        } else {
+          items = enrichSector(items)
+        }
+        allStocks.push(...items)
+      }
+
+      if (allStocks.length > 50) {
+        const source = allStocks.length > 500 ? 'kiwoom' : 'kiwoom_partial'
+        return { stocks: allStocks, source }
       }
     }
-
-    // ③ 그래도 없으면 폴백 pool 데이터 사용
-    if (items.length === 0) {
-      items = getFallbackData(label).map(s => ({ ...s }))
-    } else {
-      // 키움 데이터에 섹터 없는 종목은 pool에서 보강
-      items = enrichSector(items)
-    }
-
-    allStocks.push(...items)
   }
 
-  const source = allStocks.length > 500 ? 'kiwoom'
-               : allStocks.length > 50  ? 'kiwoom_partial'
-               : 'fallback'
-
-  return { stocks: allStocks, source }
+  // ② 키움 실패 or 키 없음 → Yahoo Finance 실시간 시세
+  return fetchAllStocksFromYahoo(market)
 }
 
 // ka10027 단일 sortTp 조회 헬퍼
@@ -522,6 +500,97 @@ function getFallbackData(market: 'KOSPI' | 'KOSDAQ' | 'ALL'): any[] {
   if (market === 'KOSPI')  return KOSPI_POOL
   if (market === 'KOSDAQ') return KOSDAQ_POOL
   return ALL_STOCK_POOL
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Yahoo Finance 실시간 시세 연동
+// KOSPI → 종목코드.KS  /  KOSDAQ → 종목코드.KQ
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function fetchYahooPrice(code: string, market: 'KOSPI' | 'KOSDAQ'): Promise<{
+  price: number; change: number; changeRate: number; volume: number
+} | null> {
+  try {
+    const suffix = market === 'KOSPI' ? 'KS' : 'KQ'
+    const symbol = `${code}.${suffix}`
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuadSignals/1.0)' }
+    })
+    if (!res.ok) return null
+    const data: any = await res.json()
+    const result = data?.chart?.result?.[0]
+    if (!result) return null
+
+    const meta   = result.meta || {}
+    const price  = Math.round(meta.regularMarketPrice || 0)
+    const volume = meta.regularMarketVolume || 0
+
+    // 전일 종가: close 배열의 마지막에서 두 번째 값
+    const closes: number[] = (result.indicators?.quote?.[0]?.close || []).filter((c: any) => c != null)
+    const prev   = closes.length >= 2 ? closes[closes.length - 2] : (meta.chartPreviousClose || price)
+    const change     = Math.round(price - prev)
+    const changeRate = prev > 0 ? Math.round((change / prev) * 10000) / 100 : 0
+
+    if (price <= 0) return null
+    return { price, change, changeRate, volume }
+  } catch {
+    return null
+  }
+}
+
+// 배치로 여러 종목 시세 조회 (Yahoo Finance 병렬, 최대 BATCH_SIZE씩)
+async function fetchYahooBatch(
+  stocks: Array<{ code: string; name: string; market: 'KOSPI' | 'KOSDAQ'; sector: string }>,
+  batchSize = 30
+): Promise<any[]> {
+  const results: any[] = []
+  for (let i = 0; i < stocks.length; i += batchSize) {
+    const batch = stocks.slice(i, i + batchSize)
+    const settled = await Promise.allSettled(
+      batch.map(s => fetchYahooPrice(s.code, s.market))
+    )
+    for (let j = 0; j < batch.length; j++) {
+      const r = settled[j]
+      const info = r.status === 'fulfilled' ? r.value : null
+      if (info && info.price > 0) {
+        results.push({ ...batch[j], ...info })
+      } else {
+        // Yahoo 실패 시 풀백 가격 그대로 사용
+        results.push({ ...batch[j] })
+      }
+    }
+  }
+  return results
+}
+
+// Yahoo Finance로 전체 종목 시세 업데이트
+async function fetchAllStocksFromYahoo(
+  market: 'KOSPI' | 'KOSDAQ' | 'ALL'
+): Promise<{ stocks: any[]; source: string }> {
+  const pool = market === 'KOSPI'  ? KOSPI_POOL
+             : market === 'KOSDAQ' ? KOSDAQ_POOL
+             : ALL_STOCK_POOL
+
+  // 풀백 종목 목록에서 code/name/market/sector 추출
+  const targets = pool.map(s => ({
+    code:   s.code,
+    name:   s.name,
+    market: s.market as 'KOSPI' | 'KOSDAQ',
+    sector: s.sector,
+  }))
+
+  // Yahoo Finance 병렬 조회 (30개씩 배치)
+  const updated = await fetchYahooBatch(targets, 30)
+
+  // 업데이트된 종목 수 카운트 (price > 0 이고 풀백값과 다른 것)
+  const realCount = updated.filter((s, i) => s.price > 0 && s.price !== pool[i]?.price).length
+
+  const source = realCount > 100 ? 'yahoo'
+               : realCount > 10  ? 'yahoo_partial'
+               : 'fallback'
+
+  return { stocks: updated, source }
 }
 
 // ─── 공통 종목 보강 (시그널 + DB 시그널 병합) ───────────────────────────────────
@@ -690,8 +759,12 @@ stockRoutes.get('/:code', async (c) => {
     }
 
     if (!stock) {
-      const all = getFallbackData('ALL')
-      stock = all.find(s => s.code === code)
+      const poolItem = ALL_STOCK_POOL.find(s => s.code === code)
+      if (poolItem) {
+        // Yahoo Finance로 실시간 시세 조회
+        const yahooInfo = await fetchYahooPrice(code, poolItem.market as 'KOSPI' | 'KOSDAQ')
+        stock = { ...poolItem, ...(yahooInfo || {}) }
+      }
     }
     if (!stock) {
       return c.json({ success: false, message: '종목을 찾을 수 없습니다.' }, 404)
