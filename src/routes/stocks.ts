@@ -164,65 +164,200 @@ async function fetchKiwoomStockInfo(
   return { price, change, changeRate, volume, sector }
 }
 
-// ─── ka10030: 종목별 등락률 순위 (한 번에 ~100종목 시세 묶음 조회) ─────────────
-// 부하 감소: 개별 ka10001 대신 순위 API로 현재가 일괄 조회
+// ─── ka10027: 전일대비등락률상위 (현재가+등락+거래량 일괄 조회) ──────────────────
+// URL: /api/dostk/rkinfo  api-id: ka10027
+// mrkt_tp: 001=코스피, 101=코스닥  sort_tp: 1=상승률
 async function fetchKiwoomRanking(
   token: string,
-  mktTp: string,   // '0'=KOSPI, '10'=KOSDAQ
-  page = 1
+  mktTp: string    // '001'=KOSPI, '101'=KOSDAQ
 ): Promise<Array<{
   code: string; name: string; market: string;
   price: number; change: number; changeRate: number; volume: number; sector: string
 }>> {
-  // ka10030: 등락률 순위 — 시장 전체 종목의 현재가+등락을 페이지 단위로 반환
-  const result = await kiwoomPost(
-    '/api/dostk/rnkinfo',
-    'ka10030',
-    token,
-    {
-      mkt_tp:    mktTp,       // 0:KOSPI, 10:KOSDAQ
-      stk_cnd:   '0',         // 0:전체
-      trde_prica_cnd: '0',    // 거래대금조건 없음
-      strt_dt:   '',
-      inpt_dt:   '',
-    }
-  )
-  if (!result || result.data.return_code !== 0) return []
-  const market = mktTp === '0' ? 'KOSPI' : 'KOSDAQ'
-  const list = result.data.flu_rt_rnk_list || result.data.stk_flu_list || []
+  const market = mktTp === '001' ? 'KOSPI' : 'KOSDAQ'
+  const allItems: any[] = []
 
-  return list.map((item: any) => {
-    const parseNum = (v: any) => Math.abs(parseInt(String(v || '0').replace(/,/g, ''), 10) || 0)
-    const parseFl  = (v: any) => parseFloat(String(v || '0').replace(/,/g, '')) || 0
-    return {
-      code:       (item.stk_cd || '').trim(),
-      name:       (item.stk_nm || '').trim(),
-      market,
-      price:      parseNum(item.cur_prc),
-      change:     parseInt(String(item.pred_pre || '0').replace(/,/g, ''), 10) || 0,
-      changeRate: parseFl(item.flu_rt),
-      volume:     parseNum(item.trde_qty || item.acc_trde_qty),
-      sector:     (item.induty_nm || item.inds_nm || '').trim(),
-    }
-  }).filter((s: any) => s.code && s.name && s.price > 0)
+  // 상승/하락/보합 3회 호출로 전 종목 커버
+  const sortTypes = ['1', '3', '5']  // 1:상승률, 3:하락률, 5:보합
+  for (const sortTp of sortTypes) {
+    let contYn = 'N', nextKey = '', page = 0
+    do {
+      const result = await kiwoomPost(
+        '/api/dostk/rkinfo',
+        'ka10027',
+        token,
+        {
+          mrkt_tp:       mktTp,
+          sort_tp:       sortTp,
+          trde_qty_cnd:  '0000',   // 전체 거래량
+          stk_cnd:       '0',      // 전체 종목
+          crd_cnd:       '0',
+          updown_incls:  '1',      // 상하한 포함
+          pric_cnd:      '0',      // 전체 가격
+          trde_prica_cnd:'0',
+          stex_tp:       '1',      // KRX
+        },
+        contYn,
+        nextKey
+      )
+      if (!result || result.data.return_code !== 0) break
+      const list = result.data.pred_pre_flu_rt_upper || []
+      for (const item of list) {
+        const parseNum = (v: any) => Math.abs(parseInt(String(v || '0').replace(/,/g, ''), 10) || 0)
+        const parseFl  = (v: any) => parseFloat(String(v || '0').replace(/,/g, '')) || 0
+        const code = (item.stk_cd || '').trim()
+        const name = (item.stk_nm || '').trim()
+        const price = parseNum(item.cur_prc)
+        if (code && name && price > 0) {
+          allItems.push({
+            code, name, market,
+            price,
+            change:     parseInt(String(item.pred_pre || '0').replace(/,/g, ''), 10) || 0,
+            changeRate: parseFl(item.flu_rt),
+            volume:     parseNum(item.now_trde_qty || item.trde_qty),
+            sector:     '',
+          })
+        }
+      }
+      contYn  = result.contYn
+      nextKey = result.nextKey
+      page++
+    } while (contYn === 'Y' && nextKey && page < 20)
+  }
+
+  // 종목코드 기준 중복 제거
+  const seen = new Set<string>()
+  return allItems.filter(s => {
+    if (seen.has(s.code)) return false
+    seen.add(s.code)
+    return true
+  })
 }
 
-// ─── 시그널 계산 ───────────────────────────────────────────────────────────────
+// ─── ka10023: 거래량급증 순위 조회 ────────────────────────────────────────────
+async function fetchKiwoomVolumeRising(
+  token: string,
+  mktTp: string    // '000'=전체, '001'=코스피, '101'=코스닥
+): Promise<Array<{
+  code: string; name: string; market: string;
+  price: number; change: number; changeRate: number;
+  prevVolume: number; curVolume: number; risingRate: number
+}>> {
+  const allItems: any[] = []
+  let contYn = 'N', nextKey = '', page = 0
+  do {
+    const result = await kiwoomPost(
+      '/api/dostk/rkinfo',
+      'ka10023',
+      token,
+      {
+        mrkt_tp:     mktTp,
+        sort_tp:     '2',    // 2:급증률
+        tm_tp:       '2',    // 2:전일 대비
+        trde_qty_tp: '5',    // 5:5천주 이상
+        tm:          '',
+        stk_cnd:     '0',
+        pric_tp:     '0',
+        stex_tp:     '1',
+      },
+      contYn,
+      nextKey
+    )
+    if (!result || result.data.return_code !== 0) break
+    const list = result.data.trde_qty_sdnin || []
+    for (const item of list) {
+      const parseNum = (v: any) => Math.abs(parseInt(String(v || '0').replace(/,/g, ''), 10) || 0)
+      const parseFl  = (v: any) => parseFloat(String(v || '0').replace(/,/g, '')) || 0
+      const code = (item.stk_cd || '').trim()
+      const name = (item.stk_nm || '').trim()
+      const price = parseNum(item.cur_prc)
+      if (code && name && price > 0) {
+        const mkt = mktTp === '001' ? 'KOSPI' : mktTp === '101' ? 'KOSDAQ' : 'ALL'
+        allItems.push({
+          code, name,
+          market: mkt,
+          price,
+          change:     parseInt(String(item.pred_pre || '0').replace(/,/g, ''), 10) || 0,
+          changeRate: parseFl(item.flu_rt),
+          prevVolume: parseNum(item.prev_trde_qty),
+          curVolume:  parseNum(item.now_trde_qty),
+          risingRate: parseFl(item.sdnin_rt),
+        })
+      }
+    }
+    contYn  = result.contYn
+    nextKey = result.nextKey
+    page++
+  } while (contYn === 'Y' && nextKey && page < 10)
+  return allItems
+}
+
+// ─── ka10081: 주식 일봉차트 조회 ─────────────────────────────────────────────
+async function fetchKiwoomDayChart(
+  token: string,
+  stkCd: string,
+  baseDt: string   // YYYYMMDD
+): Promise<Array<{
+  date: string; open: number; high: number; low: number; close: number; volume: number
+}>> {
+  const allItems: any[] = []
+  let contYn = 'N', nextKey = '', page = 0
+  do {
+    const result = await kiwoomPost(
+      '/api/dostk/chart',
+      'ka10081',
+      token,
+      { stk_cd: stkCd, base_dt: baseDt, upd_stkpc_tp: '1' },
+      contYn,
+      nextKey
+    )
+    if (!result || result.data.return_code !== 0) break
+    const list = result.data.stk_dt_pole_chart_qry || []
+    for (const item of list) {
+      const parseNum = (v: any) => Math.abs(parseInt(String(v || '0').replace(/,/g, ''), 10) || 0)
+      allItems.push({
+        date:   (item.dt || '').replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'),
+        open:   parseNum(item.open_pric),
+        high:   parseNum(item.high_pric),
+        low:    parseNum(item.low_pric),
+        close:  parseNum(item.cur_prc),
+        volume: parseNum(item.trde_qty),
+      })
+    }
+    contYn  = result.contYn
+    nextKey = result.nextKey
+    page++
+  } while (contYn === 'Y' && nextKey && page < 5)  // 최대 ~250일(5페이지)
+  return allItems
+}
+
+// ─── 시그널 계산 (recommend.ts 와 동일 기준) ────────────────────────────────
+// BUY >= 65 / SELL <= 38 / 최대 80 / 기본 50
+// (+5% 이상 BUY, -1.5% 이하 SELL, 소폭 등락은 HOLD)
 function autoSignal(changeRate: number, volume: number): { signal: string; strength: number } {
   let score = 50
-  if      (changeRate >= 8)   score = 95
-  else if (changeRate >= 5)   score = 87
-  else if (changeRate >= 3)   score = 78
-  else if (changeRate >= 1.5) score = 70
-  else if (changeRate >= 0.5) score = 62
-  else if (changeRate >= 0)   score = 55
-  else if (changeRate >= -1)  score = 48
-  else if (changeRate >= -2)  score = 40
-  else if (changeRate >= -3)  score = 33
-  else                         score = 25
 
-  if      (volume > 3_000_000) score = Math.min(100, score + 7)
-  else if (volume > 1_000_000) score = Math.min(100, score + 3)
+  if      (changeRate >= 10)   score += 28   // 78 → BUY
+  else if (changeRate >= 7)    score += 22   // 72 → BUY
+  else if (changeRate >= 5)    score += 16   // 66 → BUY
+  else if (changeRate >= 3)    score += 10   // 60 → HOLD
+  else if (changeRate >= 1.5)  score += 5    // 55 → HOLD
+  else if (changeRate >= 0.5)  score += 2    // 52 → HOLD
+  else if (changeRate >= 0)    score += 0    // 50 → HOLD
+  else if (changeRate >= -1)   score -= 5    // 45 → HOLD
+  else if (changeRate >= -2)   score -= 12   // 38 → SELL 경계
+  else if (changeRate >= -3)   score -= 20   // 30 → SELL
+  else if (changeRate >= -5)   score -= 28   // 22 → SELL
+  else                         score -= 35   // 15 → 강한 SELL
+
+  // 거래량 보정 (±3 이하로 최소화)
+  if      (volume > 5_000_000) score += 3
+  else if (volume > 2_000_000) score += 2
+  else if (volume > 1_000_000) score += 1
+  else if (volume < 100_000)   score -= 3
+  else if (volume < 300_000)   score -= 1
+
+  score = Math.min(80, Math.max(5, score))
 
   return {
     signal:   score >= 65 ? 'BUY' : score <= 38 ? 'SELL' : 'HOLD',
@@ -346,19 +481,20 @@ async function fetchAllStocksFromKiwoom(
   }
 
   const allStocks: any[] = []
+  // ka10027 mrkt_tp: 001=코스피, 101=코스닥
   const markets: Array<{ mktTp: string; label: 'KOSPI' | 'KOSDAQ' }> =
-    market === 'KOSPI'  ? [{ mktTp: '0',  label: 'KOSPI'  }] :
-    market === 'KOSDAQ' ? [{ mktTp: '10', label: 'KOSDAQ' }] :
-    [{ mktTp: '0', label: 'KOSPI' }, { mktTp: '10', label: 'KOSDAQ' }]
+    market === 'KOSPI'  ? [{ mktTp: '001', label: 'KOSPI'  }] :
+    market === 'KOSDAQ' ? [{ mktTp: '101', label: 'KOSDAQ' }] :
+    [{ mktTp: '001', label: 'KOSPI' }, { mktTp: '101', label: 'KOSDAQ' }]
 
   for (const { mktTp, label } of markets) {
-    // ① 먼저 ka10030 등락률순위로 전체 종목 한 번에 조회 시도
+    // ① ka10027 등락률상위로 전체 종목 한 번에 조회 (상승+하락+보합 3회 병렬)
     let items = await fetchKiwoomRanking(token, mktTp)
 
-    // ② ka10030 실패 시 ka10099 종목 리스트 + ka10001 시세로 폴백
+    // ② ka10027 실패 시 ka10099 종목 리스트 + ka10001 시세로 폴백
     if (items.length === 0) {
-      const stockList = await fetchKiwoomStockList(token, mktTp)
-      // 상위 200종목만 개별 시세 조회 (API 부하 제한)
+      const listMktTp = mktTp === '001' ? '0' : '10'  // ka10099는 0/10 사용
+      const stockList = await fetchKiwoomStockList(token, listMktTp)
       const top200 = stockList.slice(0, 200)
       const infoResults = await Promise.allSettled(
         top200.map(s => fetchKiwoomStockInfo(token, s.code))
@@ -475,18 +611,51 @@ stockRoutes.get('/kosdaq', async (c) => {
   }
 })
 
-// 개별 종목 조회 (키움 ka10001)
-stockRoutes.get('/:code', async (c) => {
+// ─── 거래량 급증 종목 (ka10023) ─────────────────────────────────────────────
+stockRoutes.get('/rising', async (c) => {
   try {
-    const code = c.req.param('code')
-    let stock: any = null
+    const market = c.req.query('market') || 'ALL'
+    const limit  = Math.min(parseInt(c.req.query('limit') || '30'), 100)
+    const mktTp  = market === 'KOSPI' ? '001' : market === 'KOSDAQ' ? '101' : '000'
 
     if (c.env.KIWOOM_APP_KEY && c.env.KIWOOM_SECRET_KEY) {
       const token = await getKiwoomToken(c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY)
       if (token) {
+        const items = await fetchKiwoomVolumeRising(token, mktTp)
+        if (items.length > 0) {
+          return c.json({
+            success: true,
+            stocks:  items.slice(0, limit),
+            total:   items.length,
+            source:  'kiwoom',
+          })
+        }
+      }
+    }
+    // 폴백: 기존 데이터에서 거래량 상위 반환
+    const fallback = getFallbackData(market as any)
+      .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+      .slice(0, limit)
+      .map(s => ({ ...s, prevVolume: 0, curVolume: s.volume, risingRate: 0 }))
+    return c.json({ success: true, stocks: fallback, total: fallback.length, source: 'fallback' })
+  } catch (err) {
+    return c.json({ success: false, message: '오류가 발생했습니다.' }, 500)
+  }
+})
+
+// 개별 종목 조회 (키움 ka10001 + ka10081 일봉차트)
+stockRoutes.get('/:code', async (c) => {
+  try {
+    const code = c.req.param('code')
+    let stock: any = null
+    let chartData: any[] = []
+
+    if (c.env.KIWOOM_APP_KEY && c.env.KIWOOM_SECRET_KEY) {
+      const token = await getKiwoomToken(c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY)
+      if (token) {
+        // ① 기본정보 (ka10001)
         const info = await fetchKiwoomStockInfo(token, code)
         if (info && info.price > 0) {
-          // 종목명은 폴백 목록에서 찾거나 코드 사용
           const fallbackItem = [...FALLBACK_KOSPI, ...FALLBACK_KOSDAQ].find(s => s.code === code)
           stock = {
             code,
@@ -494,6 +663,13 @@ stockRoutes.get('/:code', async (c) => {
             market: fallbackItem ? (FALLBACK_KOSPI.some(s => s.code === code) ? 'KOSPI' : 'KOSDAQ') : 'KOSPI',
             ...info,
           }
+        }
+        // ② 일봉차트 (ka10081) - 오늘 기준 60 거래일
+        const today = new Date()
+        const baseDt = today.toISOString().slice(0,10).replace(/-/g, '')
+        const rawChart = await fetchKiwoomDayChart(token, code, baseDt)
+        if (rawChart.length > 0) {
+          chartData = rawChart.slice(0, 60).reverse()  // 날짜 오름차순
         }
       }
     }
@@ -506,11 +682,17 @@ stockRoutes.get('/:code', async (c) => {
       return c.json({ success: false, message: '종목을 찾을 수 없습니다.' }, 404)
     }
 
+    // 차트 폴백 (키움 실패 시)
+    if (chartData.length === 0) {
+      chartData = generateMockChartData(stock.price)
+    }
+
     const sig = autoSignal(stock.changeRate || 0, stock.volume || 0)
     return c.json({
       success: true,
       stock: { ...stock, ...sig },
-      chartData: generateMockChartData(stock.price),
+      chartData,
+      chartSource: chartData.length > 0 && (stock.price > 0) ? 'kiwoom' : 'mock',
     })
   } catch (error) {
     return c.json({ success: false, message: '오류가 발생했습니다.' }, 500)
