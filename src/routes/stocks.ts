@@ -385,7 +385,8 @@ function enrichSector(stocks: any[]): any[] {
 async function fetchAllStocksFromKiwoom(
   appKey: string,
   secretKey: string,
-  market: 'KOSPI' | 'KOSDAQ' | 'ALL'
+  market: 'KOSPI' | 'KOSDAQ' | 'ALL',
+  kv?: KVNamespace
 ): Promise<{ stocks: any[]; source: string }> {
   // ① 키움 API 시도
   if (appKey && secretKey) {
@@ -442,8 +443,8 @@ async function fetchAllStocksFromKiwoom(
     }
   }
 
-  // ② 키움 실패 or 키 없음 → Yahoo Finance 실시간 시세
-  return fetchAllStocksFromYahoo(market)
+  // ② 키움 실패 or 키 없음 → Yahoo Finance 실시간 시세 (KV 캐시 활용)
+  return fetchAllStocksFromYahoo(market, kv)
 }
 
 // ka10027 단일 sortTp 조회 헬퍼
@@ -564,15 +565,28 @@ async function fetchYahooBatch(
   return results
 }
 
-// Yahoo Finance로 전체 종목 시세 업데이트
+// Yahoo Finance로 전체 종목 시세 업데이트 (KV 캐시 지원)
 async function fetchAllStocksFromYahoo(
-  market: 'KOSPI' | 'KOSDAQ' | 'ALL'
+  market: 'KOSPI' | 'KOSDAQ' | 'ALL',
+  kv?: KVNamespace
 ): Promise<{ stocks: any[]; source: string }> {
+  const cacheKey = `yahoo_stocks_${market}`
+  const CACHE_TTL = 300 // 5분 캐시
+
+  // KV 캐시 확인
+  if (kv) {
+    try {
+      const cached = await kv.get(cacheKey, 'json') as any
+      if (cached && cached.stocks && cached.ts && (Date.now() - cached.ts) < CACHE_TTL * 1000) {
+        return { stocks: cached.stocks, source: cached.source || 'yahoo_cache' }
+      }
+    } catch {}
+  }
+
   const pool = market === 'KOSPI'  ? KOSPI_POOL
              : market === 'KOSDAQ' ? KOSDAQ_POOL
              : ALL_STOCK_POOL
 
-  // 풀백 종목 목록에서 code/name/market/sector 추출
   const targets = pool.map(s => ({
     code:   s.code,
     name:   s.name,
@@ -580,15 +594,25 @@ async function fetchAllStocksFromYahoo(
     sector: s.sector,
   }))
 
-  // Yahoo Finance 병렬 조회 (30개씩 배치)
-  const updated = await fetchYahooBatch(targets, 30)
+  // Yahoo Finance 병렬 조회 (50개씩 배치)
+  const updated = await fetchYahooBatch(targets, 50)
 
-  // 업데이트된 종목 수 카운트 (price > 0 이고 풀백값과 다른 것)
-  const realCount = updated.filter((s, i) => s.price > 0 && s.price !== pool[i]?.price).length
+  // 실제로 업데이트된 종목 수 카운트
+  const poolMap: Record<string, number> = {}
+  for (const s of pool) poolMap[s.code] = s.price
+
+  const realCount = updated.filter(s => s.price > 0 && s.price !== poolMap[s.code]).length
 
   const source = realCount > 100 ? 'yahoo'
                : realCount > 10  ? 'yahoo_partial'
                : 'fallback'
+
+  // KV에 캐시 저장
+  if (kv && source !== 'fallback') {
+    try {
+      await kv.put(cacheKey, JSON.stringify({ stocks: updated, source, ts: Date.now() }), { expirationTtl: CACHE_TTL * 2 })
+    } catch {}
+  }
 
   return { stocks: updated, source }
 }
@@ -631,7 +655,8 @@ stockRoutes.get('/', async (c) => {
     const { stocks: raw, source } = await fetchAllStocksFromKiwoom(
       c.env.KIWOOM_APP_KEY,
       c.env.KIWOOM_SECRET_KEY,
-      market as 'KOSPI' | 'KOSDAQ' | 'ALL'
+      market as 'KOSPI' | 'KOSDAQ' | 'ALL',
+      c.env.STOCK_CACHE
     )
 
     const enriched = await enrichWithSignals(raw, c.env.DB)
@@ -654,7 +679,7 @@ stockRoutes.get('/kospi', async (c) => {
   try {
     const limit = parseInt(c.req.query('limit') || '1000')
     const { stocks: raw, source } = await fetchAllStocksFromKiwoom(
-      c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY, 'KOSPI'
+      c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY, 'KOSPI', c.env.STOCK_CACHE
     )
     const enriched = await enrichWithSignals(raw, c.env.DB)
     const sorted   = enriched.sort((a, b) => (b.volume || 0) - (a.volume || 0))
@@ -669,7 +694,7 @@ stockRoutes.get('/kosdaq', async (c) => {
   try {
     const limit = parseInt(c.req.query('limit') || '1000')
     const { stocks: raw, source } = await fetchAllStocksFromKiwoom(
-      c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY, 'KOSDAQ'
+      c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY, 'KOSDAQ', c.env.STOCK_CACHE
     )
     const enriched = await enrichWithSignals(raw, c.env.DB)
     const sorted   = enriched.sort((a, b) => (b.volume || 0) - (a.volume || 0))
@@ -684,7 +709,7 @@ stockRoutes.get('/all', async (c) => {
   try {
     const limit = parseInt(c.req.query('limit') || '2000')
     const { stocks: raw, source } = await fetchAllStocksFromKiwoom(
-      c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY, 'ALL'
+      c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY, 'ALL', c.env.STOCK_CACHE
     )
     const enriched = await enrichWithSignals(raw, c.env.DB)
     const sorted   = enriched.sort((a, b) => (b.volume || 0) - (a.volume || 0))
