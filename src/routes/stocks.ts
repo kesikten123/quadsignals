@@ -610,6 +610,21 @@ stockRoutes.get('/kosdaq', async (c) => {
   }
 })
 
+// /all 라우트 — KOSPI + KOSDAQ 전체 반환 (프론트의 market.toLowerCase() === 'all' 대응)
+stockRoutes.get('/all', async (c) => {
+  try {
+    const limit = parseInt(c.req.query('limit') || '2000')
+    const { stocks: raw, source } = await fetchAllStocksFromKiwoom(
+      c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY, 'ALL'
+    )
+    const enriched = await enrichWithSignals(raw, c.env.DB)
+    const sorted   = enriched.sort((a, b) => (b.volume || 0) - (a.volume || 0))
+    return c.json({ success: true, stocks: sorted.slice(0, limit), total: sorted.length, source })
+  } catch (e) {
+    return c.json({ success: false, message: '오류' }, 500)
+  }
+})
+
 // ─── 거래량 급증 종목 (ka10023) ─────────────────────────────────────────────
 stockRoutes.get('/rising', async (c) => {
   try {
@@ -655,11 +670,12 @@ stockRoutes.get('/:code', async (c) => {
         // ① 기본정보 (ka10001)
         const info = await fetchKiwoomStockInfo(token, code)
         if (info && info.price > 0) {
-          const fallbackItem = [...FALLBACK_KOSPI, ...FALLBACK_KOSDAQ].find(s => s.code === code)
+          const poolItem = ALL_STOCK_POOL.find(s => s.code === code)
           stock = {
             code,
-            name:   fallbackItem?.name || code,
-            market: fallbackItem ? (FALLBACK_KOSPI.some(s => s.code === code) ? 'KOSPI' : 'KOSDAQ') : 'KOSPI',
+            name:   poolItem?.name || code,
+            market: poolItem?.market || (KOSPI_POOL.some(s => s.code === code) ? 'KOSPI' : 'KOSDAQ'),
+            sector: poolItem?.sector || info.sector || '',
             ...info,
           }
         }

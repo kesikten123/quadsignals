@@ -816,8 +816,14 @@ async function renderDashboard() {
 
     const summary = summaryRes.success ? summaryRes.summary : { buyCount: 0, sellCount: 0, strongBuys: [], strongSells: [] }
     const stocks = stocksRes.success ? stocksRes.stocks : []
+    const dataSource = stocksRes.source || 'fallback'
 
     document.getElementById('dashboard-content').innerHTML = `
+      ${dataSource !== 'kiwoom' ? `
+      <div style="display:flex; align-items:center; gap:8px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); border-radius:10px; padding:10px 14px; margin-bottom:14px;">
+        <i class="fas fa-info-circle" style="color:#f59e0b; font-size:14px; flex-shrink:0;"></i>
+        <span style="font-size:12px; color:#d97706;">현재 <b>샘플 가격</b>이 표시됩니다. 키움 API 키 설정 시 실시간 시세로 전환됩니다.</span>
+      </div>` : ''}
       <!-- Stats Row -->
       <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:18px;">
         ${[
@@ -1763,9 +1769,9 @@ async function loadRecBuy(silent = false) {
               </div>
             </div>
             <div style="text-align:right; flex-shrink:0;">
-              <div style="font-size:13px; font-weight:800; color:#22c55e;">${s.strength}%</div>
+              <div style="font-size:13px; font-weight:800; color:#22c55e;">${s.strength||50}%</div>
               <div style="width:44px; height:4px; background:#1f2937; border-radius:2px; margin-top:3px;">
-                <div style="width:${s.strength}%; height:100%; border-radius:2px; background:linear-gradient(90deg,#16a34a,#22c55e);"></div>
+                <div style="width:${s.strength||50}%; height:100%; border-radius:2px; background:linear-gradient(90deg,#16a34a,#22c55e);"></div>
               </div>
             </div>
           </div>
@@ -1829,7 +1835,7 @@ async function loadRecSell(silent = false) {
             </div>
             <div style="text-align:right;">
               <div style="font-size:12px; font-weight:700; color:#ef4444;">SELL</div>
-              <div style="font-size:11px; color:#6b7280;">${s.strength}%</div>
+              <div style="font-size:11px; color:#6b7280;">${s.strength||50}%</div>
             </div>
           </div>
         `).join('')}
