@@ -823,10 +823,6 @@ async function renderDashboard() {
       <div style="display:flex; align-items:center; gap:8px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); border-radius:10px; padding:10px 14px; margin-bottom:14px;">
         <i class="fas fa-info-circle" style="color:#f59e0b; font-size:14px; flex-shrink:0;"></i>
         <span style="font-size:12px; color:#d97706;">현재 <b>샘플 가격</b>이 표시됩니다. 네이버 증권 실시간 시세 연동 중입니다.</span>
-      </div>` : dataSource === 'naver' || dataSource === 'naver_partial' ? `
-      <div style="display:flex; align-items:center; gap:8px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:10px; padding:10px 14px; margin-bottom:14px;">
-        <i class="fas fa-chart-line" style="color:#22c55e; font-size:14px; flex-shrink:0;"></i>
-        <span style="font-size:12px; color:#16a34a;"><b>네이버 증권</b> 실시간 시세 적용 중</span>
       </div>` : ''}
       <!-- Stats Row -->
       <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:18px;">
