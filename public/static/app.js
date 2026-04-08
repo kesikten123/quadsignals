@@ -3459,8 +3459,15 @@ async function loadCryptoData() {
 
     const now = new Date()
     const updEl = document.getElementById('crypto-last-updated')
-    if (updEl) updEl.innerHTML = `<i class="fas fa-check-circle" style="margin-right:5px; color:#22c55e;"></i>
-      ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} 기준`
+    if (updEl) {
+      const isCached = res.cached
+      const cacheAge = res.cacheAge || 0
+      if (isCached && cacheAge > 120) {
+        updEl.innerHTML = `<i class="fas fa-database" style="margin-right:5px; color:#f59e0b;"></i>캐시(${Math.round(cacheAge/60)}분 전)`
+      } else {
+        updEl.innerHTML = `<i class="fas fa-check-circle" style="margin-right:5px; color:#22c55e;"></i>${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} 기준`
+      }
+    }
 
     if (refreshIcon) refreshIcon.style.animation = ''
   } catch(e) {

@@ -270,36 +270,66 @@ function generateTimeframeSignals(
 }
 
 // ─── Top 10 코인 목록 조회 (CoinGecko) ─────────────────────────────────────────
-async function fetchTop10Coins(kv?: KVNamespace): Promise<any[]> {
-  // KV 캐시 확인 (2분)
+async function fetchTop10Coins(kv?: KVNamespace): Promise<{ data: any[]; cached: boolean; cacheAge: number }> {
   const cacheKey = 'crypto_top10'
-  const CACHE_TTL = 120
+  const FRESH_TTL  = 120        // 2분: 신선한 캐시
+  const STALE_TTL  = 3600       // 1시간: 429 시 stale-while-revalidate 허용
+
+  // KV 캐시 확인
+  let cachedEntry: any = null
   if (kv) {
     try {
-      const cached = await kv.get(cacheKey, 'json') as any
-      if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL * 1000) {
-        return cached.data
+      cachedEntry = await kv.get(cacheKey, 'json') as any
+    } catch {}
+  }
+
+  const now = Date.now()
+  const cacheAge = cachedEntry?.ts ? Math.round((now - cachedEntry.ts) / 1000) : 9999
+
+  // 신선한 캐시가 있으면 즉시 반환
+  if (cachedEntry?.data && cacheAge < FRESH_TTL) {
+    return { data: cachedEntry.data, cached: true, cacheAge }
+  }
+
+  // CoinGecko 호출
+  try {
+    const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=true&price_change_percentage=1h%2C24h%2C7d'
+    const res = await fetch(url, { headers: CG_HEADERS })
+
+    if (res.status === 429) {
+      // Rate limit → stale 캐시 사용 (최대 1시간)
+      if (cachedEntry?.data && cacheAge < STALE_TTL) {
+        console.warn(`CoinGecko 429 - stale 캐시 사용 (${cacheAge}초 경과)`)
+        return { data: cachedEntry.data, cached: true, cacheAge }
       }
-    } catch {}
-  }
+      throw new Error('CoinGecko API rate limit (429) - 캐시 없음')
+    }
 
-  const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=true&price_change_percentage=1h%2C24h%2C7d'
-  const res = await fetch(url, { headers: CG_HEADERS })
-  if (!res.ok) throw new Error(`CoinGecko API error: ${res.status}`)
-  const data: any[] = await res.json()
+    if (!res.ok) throw new Error(`CoinGecko API error: ${res.status}`)
+    const data: any[] = await res.json()
 
-  if (kv) {
-    try {
-      await kv.put(cacheKey, JSON.stringify({ data, ts: Date.now() }), { expirationTtl: CACHE_TTL * 2 })
-    } catch {}
+    // 캐시 저장
+    if (kv && data.length > 0) {
+      try {
+        await kv.put(cacheKey, JSON.stringify({ data, ts: now }), { expirationTtl: STALE_TTL * 2 })
+      } catch {}
+    }
+    return { data, cached: false, cacheAge: 0 }
+
+  } catch (err: any) {
+    // 네트워크 오류 등 → stale 캐시 fallback
+    if (cachedEntry?.data && cacheAge < STALE_TTL) {
+      console.warn(`CoinGecko 오류 - stale 캐시 사용: ${err.message}`)
+      return { data: cachedEntry.data, cached: true, cacheAge }
+    }
+    throw err
   }
-  return data
 }
 
 // ─── GET /api/crypto/top10 - 코인 시그널 ─────────────────────────────────────
 cryptoRoutes.get('/top10', async (c) => {
   try {
-    const coins = await fetchTop10Coins(c.env.STOCK_CACHE)
+    const { data: coins, cached, cacheAge } = await fetchTop10Coins(c.env.STOCK_CACHE)
 
     const result = coins.map((coin: any, idx: number) => {
       const currentPrice  = coin.current_price || 0
@@ -313,8 +343,6 @@ cryptoRoutes.get('/top10', async (c) => {
         sparkline, currentPrice, change1h, change24h, change7d, volume24h
       )
 
-      // 전체 요약 시그널 (24h 기준)
-      const sig24h = signals.find(s => s.timeframe === '24h')!
       const buyCount  = signals.filter(s => s.signal === 'BUY').length
       const sellCount = signals.filter(s => s.signal === 'SELL').length
       const overallSignal = buyCount >= 4 ? 'BUY' : sellCount >= 4 ? 'SELL' : 'HOLD'
@@ -353,7 +381,9 @@ cryptoRoutes.get('/top10', async (c) => {
       success: true,
       coins: filtered,
       total: filtered.length,
-      source: 'coingecko',
+      source: cached ? `coingecko_cache(${cacheAge}s)` : 'coingecko',
+      cached,
+      cacheAge,
       updatedAt: new Date().toISOString(),
     })
   } catch (error: any) {
