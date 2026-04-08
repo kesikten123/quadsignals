@@ -572,6 +572,7 @@ async function fetchNaverDayChart(code: string, count = 60): Promise<Array<{
 }
 
 // 배치로 여러 종목 시세 조회 (네이버 병렬)
+// 네이버에서 유효한 가격을 받은 종목만 반환 (실패/빈 응답 종목은 제외)
 async function fetchNaverBatch(
   stocks: Array<{ code: string; name: string; market: 'KOSPI' | 'KOSDAQ'; sector: string }>,
   batchSize = 40
@@ -586,11 +587,10 @@ async function fetchNaverBatch(
       const r = settled[j]
       const info = r.status === 'fulfilled' ? r.value : null
       if (info && info.price > 0) {
+        // 네이버에서 실시간 가격을 받은 종목만 포함
         results.push({ ...batch[j], ...info })
-      } else {
-        // 네이버 실패 시 풀백 가격 그대로 사용
-        results.push({ ...batch[j] })
       }
+      // 실패한 종목은 결과에 포함하지 않음 (가격 없는 종목 제거)
     }
   }
   return results
@@ -625,21 +625,21 @@ async function fetchAllStocksFromNaver(
     sector: s.sector,
   }))
 
-  // 네이버 증권 병렬 조회 (40개씩 배치)
+  // 네이버 증권 병렬 조회 (40개씩 배치) - 실시간 가격이 있는 종목만 반환
   const updated = await fetchNaverBatch(targets, 40)
 
-  // 실제로 업데이트된 종목 수 카운트
-  const poolMap: Record<string, number> = {}
-  for (const s of pool) poolMap[s.code] = s.price
+  // 실제로 가격 데이터를 받은 종목 수 기준 source 결정
+  // 풀 크기 기준: KOSPI 343, KOSDAQ 346, ALL 689
+  const totalPool = pool.length
+  const realCount = updated.filter(s => s.price > 0).length
+  const coverageRatio = realCount / totalPool
 
-  const realCount = updated.filter(s => s.price > 0 && s.price !== poolMap[s.code]).length
-
-  const source = realCount > 100 ? 'naver'
-               : realCount > 10  ? 'naver_partial'
+  const source = coverageRatio >= 0.8 ? 'naver'
+               : coverageRatio >= 0.3 ? 'naver_partial'
                : 'fallback'
 
-  // KV에 캐시 저장
-  if (kv && source !== 'fallback') {
+  // KV에 캐시 저장 (실제 데이터가 있을 때만)
+  if (kv && source !== 'fallback' && updated.length > 0) {
     try {
       await kv.put(cacheKey, JSON.stringify({ stocks: updated, source, ts: Date.now() }), { expirationTtl: CACHE_TTL * 2 })
     } catch {}
@@ -750,33 +750,31 @@ stockRoutes.get('/all', async (c) => {
   }
 })
 
-// ─── 거래량 급증 종목 (ka10023) ─────────────────────────────────────────────
+// ─── 거래량 급증 종목 (네이버 증권 기반) ───────────────────────────────────
 stockRoutes.get('/rising', async (c) => {
   try {
     const market = c.req.query('market') || 'ALL'
     const limit  = Math.min(parseInt(c.req.query('limit') || '30'), 100)
-    const mktTp  = market === 'KOSPI' ? '001' : market === 'KOSDAQ' ? '101' : '000'
 
-    if (c.env.KIWOOM_APP_KEY && c.env.KIWOOM_SECRET_KEY) {
-      const token = await getKiwoomToken(c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY)
-      if (token) {
-        const items = await fetchKiwoomVolumeRising(token, mktTp)
-        if (items.length > 0) {
-          return c.json({
-            success: true,
-            stocks:  items.slice(0, limit),
-            total:   items.length,
-            source:  'kiwoom',
-          })
-        }
-      }
-    }
-    // 폴백: 기존 데이터에서 거래량 상위 반환
-    const fallback = getFallbackData(market as any)
+    // 네이버 증권으로 해당 마켓 전체 시세 조회 후 거래량 상위 추출
+    const { stocks: allStocks, source } = await fetchAllStocksFromNaver(
+      market as 'KOSPI' | 'KOSDAQ' | 'ALL',
+      c.env.STOCK_CACHE
+    )
+
+    // 가격이 있는 종목만, 거래량 기준 정렬
+    const risingStocks = allStocks
+      .filter(s => s.price > 0 && s.volume > 0)
       .sort((a, b) => (b.volume || 0) - (a.volume || 0))
       .slice(0, limit)
       .map(s => ({ ...s, prevVolume: 0, curVolume: s.volume, risingRate: 0 }))
-    return c.json({ success: true, stocks: fallback, total: fallback.length, source: 'fallback' })
+
+    return c.json({
+      success: true,
+      stocks:  risingStocks,
+      total:   risingStocks.length,
+      source,
+    })
   } catch (err) {
     return c.json({ success: false, message: '오류가 발생했습니다.' }, 500)
   }

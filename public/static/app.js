@@ -1310,11 +1310,11 @@ function renderMarketTable() {
                   <div style="font-weight:700; color:white; font-size:13px;">${s.name}</div>
                   <div style="font-size:10px; color:#4b5563; letter-spacing:0.03em;">${s.code}</div>
                 </td>
-                <td style="font-weight:700; color:white; white-space:nowrap; font-size:13px;">${(s.price||0).toLocaleString()}<span style="font-size:10px; color:#6b7280; margin-left:2px;">원</span></td>
+                <td style="font-weight:700; color:white; white-space:nowrap; font-size:13px;">${s.price > 0 ? s.price.toLocaleString() + '<span style="font-size:10px; color:#6b7280; margin-left:2px;">원</span>' : '<span style="color:#4b5563; font-size:12px;">-</span>'}</td>
                 <td style="color:${chgColor}; font-weight:700; white-space:nowrap; font-size:13px;">
-                  ${(s.changeRate||0) >= 0 ? '▲' : '▼'} ${Math.abs(s.changeRate||0).toFixed(2)}%
+                  ${s.changeRate !== 0 ? ((s.changeRate||0) >= 0 ? '▲' : '▼') + ' ' + Math.abs(s.changeRate||0).toFixed(2) + '%' : '<span style="color:#6b7280">-</span>'}
                 </td>
-                <td style="font-size:12px; color:#9ca3af; white-space:nowrap;">${(s.volume||0).toLocaleString()}</td>
+                <td style="font-size:12px; color:#9ca3af; white-space:nowrap;">${s.volume > 0 ? (s.volume||0).toLocaleString() : '-'}</td>
                 <td style="font-size:11px; color:#6b7280; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${s.sector||'-'}">${s.sector||'-'}</td>
                 <td><span class="signal-${(s.signal||'HOLD').toLowerCase()}">${s.signal||'HOLD'}</span></td>
                 <td>
