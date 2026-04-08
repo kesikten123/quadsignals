@@ -2105,9 +2105,33 @@ function renderAdminLayout(page, params) {
         <i class="fas fa-cog" style="width:16px; text-align:center; font-size:14px;"></i>
         <span style="font-size:14px;">관리자 설정</span>
       </div>
-      <div class="sidebar-item" onclick="navigate('dashboard'); closeSidebar();">
+      <div style="margin:14px 16px 0; padding-top:14px; border-top:1px solid rgba(255,255,255,0.04);">
+        <p style="font-size:10px; font-weight:700; color:#374151; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:7px;">서비스 메뉴</p>
+      </div>
+      <div class="sidebar-item ${page === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard'); closeSidebar();">
+        <i class="fas fa-tachometer-alt" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">대시보드</span>
+      </div>
+      <div class="sidebar-item ${page === 'signals' ? 'active' : ''}" onclick="navigate('signals'); closeSidebar();">
+        <i class="fas fa-signal" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">주가 시그널</span>
+      </div>
+      <div class="sidebar-item ${page === 'kospi' ? 'active' : ''}" onclick="navigate('kospi'); closeSidebar();">
         <i class="fas fa-chart-line" style="width:16px; text-align:center; font-size:14px;"></i>
-        <span style="font-size:14px;">사용자 뷰</span>
+        <span style="font-size:14px;">KOSPI</span>
+      </div>
+      <div class="sidebar-item ${page === 'kosdaq' ? 'active' : ''}" onclick="navigate('kosdaq'); closeSidebar();">
+        <i class="fas fa-chart-bar" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">KOSDAQ</span>
+      </div>
+      <div class="sidebar-item ${page === 'crypto' ? 'active' : ''}" onclick="navigate('crypto'); closeSidebar();">
+        <i class="fab fa-bitcoin" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">코인 시그널</span>
+        <span style="font-size:9px; font-weight:800; color:#22c55e; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.25); border-radius:4px; padding:1px 5px;">NEW</span>
+      </div>
+      <div class="sidebar-item ${page === 'news' ? 'active' : ''}" onclick="navigate('news'); closeSidebar();">
+        <i class="fas fa-newspaper" style="width:16px; text-align:center; font-size:14px;"></i>
+        <span style="font-size:14px;">뉴스 &amp; 추천</span>
       </div>
       <div class="sidebar-item" onclick="handleLogout()">
         <i class="fas fa-sign-out-alt" style="width:16px; text-align:center; font-size:14px; color:#ef4444;"></i>
@@ -2154,6 +2178,14 @@ function renderAdminLayout(page, params) {
   else if (page === 'admin-users') renderAdminUsers()
   else if (page === 'admin-signals') renderAdminSignals()
   else if (page === 'admin-settings') renderAdminSettings()
+  // 공통 서비스 페이지 (admin도 접근 가능)
+  else if (page === 'dashboard') renderDashboard()
+  else if (page === 'signals') renderSignals()
+  else if (page === 'kospi') renderMarket('KOSPI')
+  else if (page === 'kosdaq') renderMarket('KOSDAQ')
+  else if (page === 'crypto') renderCrypto()
+  else if (page === 'news') renderNews()
+  else if (page === 'settings') renderSettings()
   else renderAdminDashboard()
 }
 
