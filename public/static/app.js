@@ -822,11 +822,11 @@ async function renderDashboard() {
       ${dataSource === 'fallback' ? `
       <div style="display:flex; align-items:center; gap:8px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); border-radius:10px; padding:10px 14px; margin-bottom:14px;">
         <i class="fas fa-info-circle" style="color:#f59e0b; font-size:14px; flex-shrink:0;"></i>
-        <span style="font-size:12px; color:#d97706;">현재 <b>샘플 가격</b>이 표시됩니다. 키움 API 키 설정 시 실시간 시세로 전환됩니다.</span>
-      </div>` : dataSource === 'yahoo' || dataSource === 'yahoo_partial' ? `
-      <div style="display:flex; align-items:center; gap:8px; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.2); border-radius:10px; padding:10px 14px; margin-bottom:14px;">
-        <i class="fas fa-chart-line" style="color:#6366f1; font-size:14px; flex-shrink:0;"></i>
-        <span style="font-size:12px; color:#818cf8;"><b>Yahoo Finance</b> 실시간 시세 적용 중 (15~20분 지연)</span>
+        <span style="font-size:12px; color:#d97706;">현재 <b>샘플 가격</b>이 표시됩니다. 네이버 증권 실시간 시세 연동 중입니다.</span>
+      </div>` : dataSource === 'naver' || dataSource === 'naver_partial' ? `
+      <div style="display:flex; align-items:center; gap:8px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:10px; padding:10px 14px; margin-bottom:14px;">
+        <i class="fas fa-chart-line" style="color:#22c55e; font-size:14px; flex-shrink:0;"></i>
+        <span style="font-size:12px; color:#16a34a;"><b>네이버 증권</b> 실시간 시세 적용 중</span>
       </div>` : ''}
       <!-- Stats Row -->
       <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:18px;">
@@ -1162,7 +1162,7 @@ async function renderMarket(market) {
     <div id="market-content">
       <div style="display:flex; flex-direction:column; align-items:center; padding:60px; gap:16px;">
         <div class="spinner"></div>
-        <p style="color:#6b7280; font-size:13px;">키움 REST API에서 종목 데이터를 가져오는 중...</p>
+        <p style="color:#6b7280; font-size:13px;">네이버 증권에서 종목 데이터를 가져오는 중...</p>
       </div>
     </div>
   `
@@ -1191,26 +1191,26 @@ async function renderMarket(market) {
     // 데이터 소스 뱃지
     const srcBadge = document.getElementById('mkt-source-badge')
     if (srcBadge) {
-      if (source === 'kiwoom') {
+      if (source === 'naver') {
+        srcBadge.innerHTML = '<i class="fas fa-check-circle" style="margin-right:4px;"></i>네이버 실시간'
+        srcBadge.style.color = '#22c55e'
+        srcBadge.style.background = 'rgba(34,197,94,0.1)'
+        srcBadge.style.borderColor = 'rgba(34,197,94,0.25)'
+      } else if (source === 'naver_partial') {
+        srcBadge.innerHTML = '<i class="fas fa-chart-line" style="margin-right:4px;"></i>네이버(일부)'
+        srcBadge.style.color = '#16a34a'
+        srcBadge.style.background = 'rgba(22,163,74,0.1)'
+        srcBadge.style.borderColor = 'rgba(22,163,74,0.25)'
+      } else if (source === 'kiwoom') {
         srcBadge.innerHTML = '<i class="fas fa-check-circle" style="margin-right:4px;"></i>키움 실시간'
         srcBadge.style.color = '#22c55e'
         srcBadge.style.background = 'rgba(34,197,94,0.1)'
         srcBadge.style.borderColor = 'rgba(34,197,94,0.25)'
-      } else if (source === 'kiwoom_partial') {
-        srcBadge.innerHTML = '<i class="fas fa-exclamation-circle" style="margin-right:4px;"></i>키움(일부)'
-        srcBadge.style.color = '#f59e0b'
-        srcBadge.style.background = 'rgba(245,158,11,0.1)'
-        srcBadge.style.borderColor = 'rgba(245,158,11,0.25)'
-      } else if (source === 'yahoo') {
-        srcBadge.innerHTML = '<i class="fas fa-chart-line" style="margin-right:4px;"></i>Yahoo 실시간'
-        srcBadge.style.color = '#6366f1'
-        srcBadge.style.background = 'rgba(99,102,241,0.1)'
-        srcBadge.style.borderColor = 'rgba(99,102,241,0.25)'
-      } else if (source === 'yahoo_partial') {
-        srcBadge.innerHTML = '<i class="fas fa-chart-line" style="margin-right:4px;"></i>Yahoo(일부)'
-        srcBadge.style.color = '#8b5cf6'
-        srcBadge.style.background = 'rgba(139,92,246,0.1)'
-        srcBadge.style.borderColor = 'rgba(139,92,246,0.25)'
+      } else if (source === 'naver_cache') {
+        srcBadge.innerHTML = '<i class="fas fa-bolt" style="margin-right:4px;"></i>네이버 캐시'
+        srcBadge.style.color = '#0ea5e9'
+        srcBadge.style.background = 'rgba(14,165,233,0.1)'
+        srcBadge.style.borderColor = 'rgba(14,165,233,0.25)'
       } else {
         srcBadge.innerHTML = '<i class="fas fa-database" style="margin-right:4px;"></i>샘플 데이터'
         srcBadge.style.color = '#6b7280'

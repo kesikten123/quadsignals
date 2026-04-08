@@ -443,8 +443,8 @@ async function fetchAllStocksFromKiwoom(
     }
   }
 
-  // ② 키움 실패 or 키 없음 → Yahoo Finance 실시간 시세 (KV 캐시 활용)
-  return fetchAllStocksFromYahoo(market, kv)
+  // ② 키움 실패 or 키 없음 → 네이버 증권 실시간 시세 (KV 캐시 활용)
+  return fetchAllStocksFromNaver(market, kv)
 }
 
 // ka10027 단일 sortTp 조회 헬퍼
@@ -504,34 +504,31 @@ function getFallbackData(market: 'KOSPI' | 'KOSDAQ' | 'ALL'): any[] {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Yahoo Finance 실시간 시세 연동
-// KOSPI → 종목코드.KS  /  KOSDAQ → 종목코드.KQ
+// 네이버 증권 실시간 시세 연동
+// API: https://api.finance.naver.com/service/itemSummary.nhn?itemcode=XXXXXX
+// 차트: https://fchart.stock.naver.com/sise.nhn?symbol=XXXXXX&timeframe=day&count=60
 // ══════════════════════════════════════════════════════════════════════════════
 
-async function fetchYahooPrice(code: string, market: 'KOSPI' | 'KOSDAQ'): Promise<{
+const NAVER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Referer': 'https://finance.naver.com/',
+  'Accept': 'application/json, text/plain, */*',
+}
+
+// 단일 종목 시세 조회 (네이버 itemSummary API)
+async function fetchNaverPrice(code: string): Promise<{
   price: number; change: number; changeRate: number; volume: number
 } | null> {
   try {
-    const suffix = market === 'KOSPI' ? 'KS' : 'KQ'
-    const symbol = `${code}.${suffix}`
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuadSignals/1.0)' }
-    })
+    const url = `https://api.finance.naver.com/service/itemSummary.nhn?itemcode=${code}`
+    const res = await fetch(url, { headers: NAVER_HEADERS })
     if (!res.ok) return null
     const data: any = await res.json()
-    const result = data?.chart?.result?.[0]
-    if (!result) return null
 
-    const meta   = result.meta || {}
-    const price  = Math.round(meta.regularMarketPrice || 0)
-    const volume = meta.regularMarketVolume || 0
-
-    // 전일 종가: close 배열의 마지막에서 두 번째 값
-    const closes: number[] = (result.indicators?.quote?.[0]?.close || []).filter((c: any) => c != null)
-    const prev   = closes.length >= 2 ? closes[closes.length - 2] : (meta.chartPreviousClose || price)
-    const change     = Math.round(price - prev)
-    const changeRate = prev > 0 ? Math.round((change / prev) * 10000) / 100 : 0
+    const price      = Number(data.now) || 0
+    const change     = Number(data.diff) || 0
+    const changeRate = Number(data.rate) || 0
+    const volume     = Number(data.quant) || 0
 
     if (price <= 0) return null
     return { price, change, changeRate, volume }
@@ -540,16 +537,50 @@ async function fetchYahooPrice(code: string, market: 'KOSPI' | 'KOSDAQ'): Promis
   }
 }
 
-// 배치로 여러 종목 시세 조회 (Yahoo Finance 병렬, 최대 BATCH_SIZE씩)
-async function fetchYahooBatch(
+// 네이버 증권 일봉 차트 조회 (XML 파싱)
+async function fetchNaverDayChart(code: string, count = 60): Promise<Array<{
+  date: string; open: number; high: number; low: number; close: number; volume: number
+}>> {
+  try {
+    const url = `https://fchart.stock.naver.com/sise.nhn?symbol=${code}&timeframe=day&count=${count}&requestType=0`
+    const res = await fetch(url, { headers: NAVER_HEADERS })
+    if (!res.ok) return []
+    const xml = await res.text()
+
+    // XML: <item data="YYYYMMDD|open|high|low|close|volume" />
+    const items: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> = []
+    const regex = /<item data="([^"]+)" \/>/g
+    let m: RegExpExecArray | null
+    while ((m = regex.exec(xml)) !== null) {
+      const parts = m[1].split('|')
+      if (parts.length < 6) continue
+      const dateStr = parts[0] // YYYYMMDD
+      const date = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`
+      items.push({
+        date,
+        open:   parseInt(parts[1]) || 0,
+        high:   parseInt(parts[2]) || 0,
+        low:    parseInt(parts[3]) || 0,
+        close:  parseInt(parts[4]) || 0,
+        volume: parseInt(parts[5]) || 0,
+      })
+    }
+    return items
+  } catch {
+    return []
+  }
+}
+
+// 배치로 여러 종목 시세 조회 (네이버 병렬)
+async function fetchNaverBatch(
   stocks: Array<{ code: string; name: string; market: 'KOSPI' | 'KOSDAQ'; sector: string }>,
-  batchSize = 30
+  batchSize = 40
 ): Promise<any[]> {
   const results: any[] = []
   for (let i = 0; i < stocks.length; i += batchSize) {
     const batch = stocks.slice(i, i + batchSize)
     const settled = await Promise.allSettled(
-      batch.map(s => fetchYahooPrice(s.code, s.market))
+      batch.map(s => fetchNaverPrice(s.code))
     )
     for (let j = 0; j < batch.length; j++) {
       const r = settled[j]
@@ -557,7 +588,7 @@ async function fetchYahooBatch(
       if (info && info.price > 0) {
         results.push({ ...batch[j], ...info })
       } else {
-        // Yahoo 실패 시 풀백 가격 그대로 사용
+        // 네이버 실패 시 풀백 가격 그대로 사용
         results.push({ ...batch[j] })
       }
     }
@@ -565,20 +596,20 @@ async function fetchYahooBatch(
   return results
 }
 
-// Yahoo Finance로 전체 종목 시세 업데이트 (KV 캐시 지원)
-async function fetchAllStocksFromYahoo(
+// 네이버 증권으로 전체 종목 시세 업데이트 (KV 캐시 지원)
+async function fetchAllStocksFromNaver(
   market: 'KOSPI' | 'KOSDAQ' | 'ALL',
   kv?: KVNamespace
 ): Promise<{ stocks: any[]; source: string }> {
-  const cacheKey = `yahoo_stocks_${market}`
-  const CACHE_TTL = 300 // 5분 캐시
+  const cacheKey = `naver_stocks_${market}`
+  const CACHE_TTL = 180 // 3분 캐시 (네이버는 실시간에 가까우므로 짧게 설정)
 
   // KV 캐시 확인
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, 'json') as any
       if (cached && cached.stocks && cached.ts && (Date.now() - cached.ts) < CACHE_TTL * 1000) {
-        return { stocks: cached.stocks, source: cached.source || 'yahoo_cache' }
+        return { stocks: cached.stocks, source: cached.source || 'naver_cache' }
       }
     } catch {}
   }
@@ -594,8 +625,8 @@ async function fetchAllStocksFromYahoo(
     sector: s.sector,
   }))
 
-  // Yahoo Finance 병렬 조회 (50개씩 배치)
-  const updated = await fetchYahooBatch(targets, 50)
+  // 네이버 증권 병렬 조회 (40개씩 배치)
+  const updated = await fetchNaverBatch(targets, 40)
 
   // 실제로 업데이트된 종목 수 카운트
   const poolMap: Record<string, number> = {}
@@ -603,8 +634,8 @@ async function fetchAllStocksFromYahoo(
 
   const realCount = updated.filter(s => s.price > 0 && s.price !== poolMap[s.code]).length
 
-  const source = realCount > 100 ? 'yahoo'
-               : realCount > 10  ? 'yahoo_partial'
+  const source = realCount > 100 ? 'naver'
+               : realCount > 10  ? 'naver_partial'
                : 'fallback'
 
   // KV에 캐시 저장
@@ -751,51 +782,45 @@ stockRoutes.get('/rising', async (c) => {
   }
 })
 
-// 개별 종목 조회 (키움 ka10001 + ka10081 일봉차트)
+// 개별 종목 조회 (네이버 증권 실시간 시세 + 일봉차트)
 stockRoutes.get('/:code', async (c) => {
   try {
     const code = c.req.param('code')
     let stock: any = null
     let chartData: any[] = []
 
-    if (c.env.KIWOOM_APP_KEY && c.env.KIWOOM_SECRET_KEY) {
-      const token = await getKiwoomToken(c.env.KIWOOM_APP_KEY, c.env.KIWOOM_SECRET_KEY)
-      if (token) {
-        // ① 기본정보 (ka10001)
-        const info = await fetchKiwoomStockInfo(token, code)
-        if (info && info.price > 0) {
-          const poolItem = ALL_STOCK_POOL.find(s => s.code === code)
-          stock = {
-            code,
-            name:   poolItem?.name || code,
-            market: poolItem?.market || (KOSPI_POOL.some(s => s.code === code) ? 'KOSPI' : 'KOSDAQ'),
-            sector: poolItem?.sector || info.sector || '',
-            ...info,
-          }
-        }
-        // ② 일봉차트 (ka10081) - 오늘 기준 60 거래일
-        const today = new Date()
-        const baseDt = today.toISOString().slice(0,10).replace(/-/g, '')
-        const rawChart = await fetchKiwoomDayChart(token, code, baseDt)
-        if (rawChart.length > 0) {
-          chartData = rawChart.slice(0, 60).reverse()  // 날짜 오름차순
-        }
+    // ① 풀백에서 종목 기본정보 가져오기
+    const poolItem = ALL_STOCK_POOL.find(s => s.code === code)
+
+    // ② 네이버 증권으로 실시간 시세 + 차트 병렬 조회
+    const [naverInfo, naverChart] = await Promise.all([
+      fetchNaverPrice(code),
+      fetchNaverDayChart(code, 60),
+    ])
+
+    if (poolItem) {
+      stock = { ...poolItem, ...(naverInfo || {}) }
+    } else if (naverInfo) {
+      // 풀백에 없는 종목이지만 네이버에서 시세 있으면 사용
+      stock = {
+        code,
+        name:   code,
+        market: KOSPI_POOL.some(s => s.code === code) ? 'KOSPI' : 'KOSDAQ',
+        sector: '기타',
+        ...naverInfo,
       }
     }
 
-    if (!stock) {
-      const poolItem = ALL_STOCK_POOL.find(s => s.code === code)
-      if (poolItem) {
-        // Yahoo Finance로 실시간 시세 조회
-        const yahooInfo = await fetchYahooPrice(code, poolItem.market as 'KOSPI' | 'KOSDAQ')
-        stock = { ...poolItem, ...(yahooInfo || {}) }
-      }
-    }
     if (!stock) {
       return c.json({ success: false, message: '종목을 찾을 수 없습니다.' }, 404)
     }
 
-    // 차트 폴백 (키움 실패 시)
+    // ③ 차트 데이터 적용
+    if (naverChart.length > 0) {
+      chartData = naverChart  // 이미 날짜 오름차순
+    }
+
+    // 차트 폴백 (네이버 실패 시)
     if (chartData.length === 0) {
       chartData = generateMockChartData(stock.price)
     }
@@ -805,7 +830,7 @@ stockRoutes.get('/:code', async (c) => {
       success: true,
       stock: { ...stock, ...sig },
       chartData,
-      chartSource: chartData.length > 0 && (stock.price > 0) ? 'kiwoom' : 'mock',
+      chartSource: naverChart.length > 0 ? 'naver' : 'mock',
     })
   } catch (error) {
     return c.json({ success: false, message: '오류가 발생했습니다.' }, 500)
