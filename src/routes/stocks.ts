@@ -505,23 +505,63 @@ function getFallbackData(market: 'KOSPI' | 'KOSDAQ' | 'ALL'): any[] {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 네이버 증권 실시간 시세 연동
-// API: https://api.finance.naver.com/service/itemSummary.nhn?itemcode=XXXXXX
+// 배치 API: https://polling.finance.naver.com/api/realtime/domestic/stock/{codes}
+// 단일 API: https://api.finance.naver.com/service/itemSummary.nhn?itemcode=XXXXXX
 // 차트: https://fchart.stock.naver.com/sise.nhn?symbol=XXXXXX&timeframe=day&count=60
 // ══════════════════════════════════════════════════════════════════════════════
 
 const NAVER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Referer': 'https://finance.naver.com/',
+  'Referer': 'https://m.stock.naver.com/',
   'Accept': 'application/json, text/plain, */*',
 }
 
-// 단일 종목 시세 조회 (네이버 itemSummary API)
+// 네이버 폴링 배치 API로 한번에 여러 종목 조회 (최대 ~200개/요청)
+// 응답: { datas: [{ itemCode, stockName, closePriceRaw, compareToPreviousClosePriceRaw, fluctuationsRatioRaw, accumulatedTradingVolumeRaw, compareToPreviousPrice }] }
+async function fetchNaverBatchRealtime(
+  codes: string[]
+): Promise<Map<string, { price: number; change: number; changeRate: number; volume: number }>> {
+  const result = new Map<string, { price: number; change: number; changeRate: number; volume: number }>()
+  if (codes.length === 0) return result
+  
+  try {
+    const url = `https://polling.finance.naver.com/api/realtime/domestic/stock/${codes.join(',')}`
+    const res = await fetch(url, { headers: NAVER_HEADERS })
+    if (!res.ok) return result
+    
+    const data: any = await res.json()
+    const datas = data.datas || []
+    
+    for (const item of datas) {
+      const code = item.itemCode || ''
+      const price = Number(item.closePriceRaw) || 0
+      if (code && price > 0) {
+        // compareToPreviousPrice.code: '1'=하한, '2'=상승, '3'=보합, '4'=하락, '5'=상한
+        const priceDir = item.compareToPreviousPrice?.code || '3'
+        const rawChange = Number(item.compareToPreviousClosePriceRaw) || 0
+        // 하락(4, 1) 이면 음수
+        const change = (priceDir === '4' || priceDir === '1') ? -Math.abs(rawChange) : Math.abs(rawChange)
+        const changeRate = (priceDir === '4' || priceDir === '1')
+          ? -Math.abs(Number(item.fluctuationsRatioRaw) || 0)
+          : Math.abs(Number(item.fluctuationsRatioRaw) || 0)
+        const volume = Number(item.accumulatedTradingVolumeRaw) || 0
+        result.set(code, { price, change, changeRate, volume })
+      }
+    }
+  } catch {
+    // 실패 시 빈 Map 반환
+  }
+  
+  return result
+}
+
+// 단일 종목 시세 조회 (네이버 itemSummary API) - 폴링 API 실패 시 폴백
 async function fetchNaverPrice(code: string): Promise<{
   price: number; change: number; changeRate: number; volume: number
 } | null> {
   try {
     const url = `https://api.finance.naver.com/service/itemSummary.nhn?itemcode=${code}`
-    const res = await fetch(url, { headers: NAVER_HEADERS })
+    const res = await fetch(url, { headers: { ...NAVER_HEADERS, Referer: 'https://finance.naver.com/' } })
     if (!res.ok) return null
     const data: any = await res.json()
 
@@ -571,28 +611,43 @@ async function fetchNaverDayChart(code: string, count = 60): Promise<Array<{
   }
 }
 
-// 배치로 여러 종목 시세 조회 (네이버 병렬)
+// 배치로 여러 종목 시세 조회 (네이버 폴링 배치 API 사용 - 100개씩 병렬)
 // 네이버에서 유효한 가격을 받은 종목만 반환 (실패/빈 응답 종목은 제외)
 async function fetchNaverBatch(
   stocks: Array<{ code: string; name: string; market: 'KOSPI' | 'KOSDAQ'; sector: string }>,
-  batchSize = 40
+  batchSize = 100
 ): Promise<any[]> {
   const results: any[] = []
+  
+  // batchSize개씩 나눠서 병렬 요청
+  const batches: Array<typeof stocks> = []
   for (let i = 0; i < stocks.length; i += batchSize) {
-    const batch = stocks.slice(i, i + batchSize)
+    batches.push(stocks.slice(i, i + batchSize))
+  }
+  
+  // 배치를 병렬로 요청 (최대 8개 병렬)
+  const PARALLEL = 8
+  for (let i = 0; i < batches.length; i += PARALLEL) {
+    const parallelBatches = batches.slice(i, i + PARALLEL)
     const settled = await Promise.allSettled(
-      batch.map(s => fetchNaverPrice(s.code))
+      parallelBatches.map(batch => fetchNaverBatchRealtime(batch.map(s => s.code)))
     )
-    for (let j = 0; j < batch.length; j++) {
+    
+    for (let j = 0; j < parallelBatches.length; j++) {
+      const batch = parallelBatches[j]
       const r = settled[j]
-      const info = r.status === 'fulfilled' ? r.value : null
-      if (info && info.price > 0) {
-        // 네이버에서 실시간 가격을 받은 종목만 포함
-        results.push({ ...batch[j], ...info })
+      const priceMap = r.status === 'fulfilled' ? r.value : new Map()
+      
+      for (const s of batch) {
+        const info = priceMap.get(s.code)
+        if (info && info.price > 0) {
+          results.push({ ...s, ...info })
+        }
+        // 가격 없는 종목은 결과에 포함하지 않음
       }
-      // 실패한 종목은 결과에 포함하지 않음 (가격 없는 종목 제거)
     }
   }
+  
   return results
 }
 
@@ -790,11 +845,13 @@ stockRoutes.get('/:code', async (c) => {
     // ① 풀백에서 종목 기본정보 가져오기
     const poolItem = ALL_STOCK_POOL.find(s => s.code === code)
 
-    // ② 네이버 증권으로 실시간 시세 + 차트 병렬 조회
-    const [naverInfo, naverChart] = await Promise.all([
-      fetchNaverPrice(code),
+    // ② 네이버 배치 API로 시세 조회 + 차트 병렬
+    const [priceMap, naverChart] = await Promise.all([
+      fetchNaverBatchRealtime([code]),
       fetchNaverDayChart(code, 60),
     ])
+    
+    const naverInfo = priceMap.get(code) || null
 
     if (poolItem) {
       stock = { ...poolItem, ...(naverInfo || {}) }
