@@ -645,6 +645,7 @@ function renderUserLayout(page, params) {
         { id: 'signals',   icon: 'fas fa-signal',         label: '주가 시그널', badge: '' },
         { id: 'kospi',     icon: 'fas fa-chart-line',     label: 'KOSPI', badge: '' },
         { id: 'kosdaq',    icon: 'fas fa-chart-bar',      label: 'KOSDAQ', badge: '' },
+        { id: 'crypto',    icon: 'fab fa-bitcoin',        label: '코인 시그널', badge: 'NEW' },
         { id: 'news',      icon: 'fas fa-newspaper',      label: '뉴스 & 종목 추천', badge: 'LIVE' },
       ].map(item => `
         <div class="sidebar-item ${page === item.id ? 'active' : ''}" onclick="navigate('${item.id}'); closeSidebar();"
@@ -684,7 +685,7 @@ function renderUserLayout(page, params) {
         ${[
           { id: 'dashboard', icon: 'fa-tachometer-alt', label: '대시보드' },
           { id: 'signals',   icon: 'fa-signal',         label: '시그널' },
-          { id: 'kospi',     icon: 'fa-chart-line',     label: 'KOSPI' },
+          { id: 'crypto',    icon: 'fa-bitcoin',        label: '코인' },
           { id: 'news',      icon: 'fa-newspaper',      label: '뉴스' },
         ].map(item => `
           <button class="bottom-nav-item ${page === item.id ? 'active' : ''}" onclick="navigate('${item.id}')" id="bnav-${item.id}">
@@ -707,6 +708,7 @@ function renderUserLayout(page, params) {
   else if (page === 'kospi') renderMarket('KOSPI')
   else if (page === 'kosdaq') renderMarket('KOSDAQ')
   else if (page === 'news') renderNews()
+  else if (page === 'crypto') renderCrypto()
   else if (page === 'settings') renderSettings()
   else renderDashboard()
 }
@@ -3342,6 +3344,470 @@ function renderAdminSettings() {
       text.style.color = lv.color
     })
   }
+}
+
+// ============================================================
+// CRYPTO SIGNAL PAGE
+// ============================================================
+let cryptoData = []
+let cryptoSelectedCoin = null
+let cryptoAutoRefreshTimer = null
+
+async function renderCrypto() {
+  const container = document.getElementById('page-content')
+  if (!container) return
+
+  container.innerHTML = `
+    <div style="max-width:1200px; margin:0 auto;">
+      <!-- 헤더 -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h1 style="font-size:clamp(20px,3vw,26px); font-weight:800; color:white; margin:0; display:flex; align-items:center; gap:10px;">
+            <span style="background:linear-gradient(135deg,#f7931a,#ffb347); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">
+              <i class="fab fa-bitcoin" style="-webkit-text-fill-color:#f7931a;"></i>
+            </span>
+            코인 매매 시그널
+          </h1>
+          <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">코인마켓캡 시총 상위 10개 코인의 AI 기반 매매 시그널</p>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div id="crypto-last-updated" style="font-size:11px; color:#4b5563; background:rgba(255,255,255,0.03); padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+            <i class="fas fa-sync-alt" style="margin-right:5px; color:#f7931a;"></i>로딩 중...
+          </div>
+          <button onclick="refreshCryptoData()" style="background:linear-gradient(135deg,#f7931a,#f59e0b); border:none; color:white; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <i class="fas fa-sync-alt" id="crypto-refresh-icon"></i> 새로고침
+          </button>
+        </div>
+      </div>
+
+      <!-- 시그널 설명 배너 -->
+      <div style="background:rgba(247,147,26,0.06); border:1px solid rgba(247,147,26,0.15); border-radius:12px; padding:14px 18px; margin-bottom:22px; display:flex; align-items:flex-start; gap:12px;">
+        <i class="fas fa-info-circle" style="color:#f7931a; margin-top:2px; flex-shrink:0;"></i>
+        <div style="font-size:12px; color:#9ca3af; line-height:1.7;">
+          <b style="color:#e5e7eb;">AI 시그널 분석 방법:</b> RSI(과매수/과매도), MACD(추세 교차), 볼린저밴드(변동성), 가격 추세를 종합 분석합니다.
+          각 시간대별로 <span style="color:#22c55e; font-weight:600;">BUY</span> /
+          <span style="color:#ef4444; font-weight:600;">SELL</span> /
+          <span style="color:#f59e0b; font-weight:600;">HOLD</span> 시그널과 목표가·손절가를 제공합니다.
+          <b style="color:#f97316;">⚠ 투자 참고용이며, 실제 투자 결정은 본인 책임입니다.</b>
+        </div>
+      </div>
+
+      <!-- 코인 목록 (로딩 상태) -->
+      <div id="crypto-loading" style="text-align:center; padding:60px 20px; color:#6b7280;">
+        <div style="font-size:36px; margin-bottom:16px; animation:spin 1s linear infinite; display:inline-block;">
+          <i class="fas fa-circle-notch" style="color:#f7931a;"></i>
+        </div>
+        <p style="font-size:14px;">코인 데이터 및 시그널 분석 중...</p>
+      </div>
+
+      <div id="crypto-content" style="display:none;">
+        <!-- 요약 카드 -->
+        <div id="crypto-summary-cards" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:28px;"></div>
+
+        <!-- 코인 카드 그리드 -->
+        <div id="crypto-cards-grid" style="display:flex; flex-direction:column; gap:16px;"></div>
+      </div>
+    </div>
+  `
+
+  // CSS 애니메이션
+  if (!document.getElementById('crypto-style')) {
+    const style = document.createElement('style')
+    style.id = 'crypto-style'
+    style.textContent = `
+      @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+      @keyframes cryptoPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+      .crypto-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+      .crypto-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(247,147,26,0.14); }
+      .signal-pill-buy  { background:rgba(34,197,94,0.15);  border:1px solid rgba(34,197,94,0.35);  color:#22c55e; }
+      .signal-pill-sell { background:rgba(239,68,68,0.15);  border:1px solid rgba(239,68,68,0.35);  color:#ef4444; }
+      .signal-pill-hold { background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.35); color:#f59e0b; }
+      .crypto-sparkline canvas { max-width:100%; }
+      @media (max-width: 600px) {
+        .crypto-signal-grid { grid-template-columns: repeat(2,1fr) !important; }
+      }
+      @media (max-width: 380px) {
+        .crypto-signal-grid { grid-template-columns: repeat(1,1fr) !important; }
+      }
+    `
+    document.head.appendChild(style)
+  }
+
+  await loadCryptoData()
+
+  // 2분마다 자동 갱신
+  if (cryptoAutoRefreshTimer) clearInterval(cryptoAutoRefreshTimer)
+  cryptoAutoRefreshTimer = setInterval(() => {
+    if (document.getElementById('crypto-content')) loadCryptoData()
+    else clearInterval(cryptoAutoRefreshTimer)
+  }, 120000)
+}
+
+async function loadCryptoData() {
+  try {
+    const refreshIcon = document.getElementById('crypto-refresh-icon')
+    if (refreshIcon) refreshIcon.style.animation = 'spin 1s linear infinite'
+
+    const res = await api.get('/crypto/top10')
+    cryptoData = res.coins || []
+
+    document.getElementById('crypto-loading').style.display = 'none'
+    document.getElementById('crypto-content').style.display = 'block'
+
+    renderCryptoSummary()
+    renderCryptoCards()
+
+    const now = new Date()
+    const updEl = document.getElementById('crypto-last-updated')
+    if (updEl) updEl.innerHTML = `<i class="fas fa-check-circle" style="margin-right:5px; color:#22c55e;"></i>
+      ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} 기준`
+
+    if (refreshIcon) refreshIcon.style.animation = ''
+  } catch(e) {
+    document.getElementById('crypto-loading').innerHTML = `
+      <div style="color:#ef4444; padding:40px 20px; text-align:center;">
+        <i class="fas fa-exclamation-circle" style="font-size:36px; margin-bottom:12px; display:block;"></i>
+        <p style="font-size:14px;">코인 데이터 로드 실패. 잠시 후 다시 시도해주세요.</p>
+        <button onclick="loadCryptoData()" style="margin-top:12px; background:#f7931a; border:none; color:white; padding:8px 20px; border-radius:8px; cursor:pointer;">재시도</button>
+      </div>`
+    document.getElementById('crypto-loading').style.display = 'block'
+  }
+}
+
+async function refreshCryptoData() {
+  document.getElementById('crypto-loading').style.display = 'block'
+  document.getElementById('crypto-content').style.display = 'none'
+  document.getElementById('crypto-loading').innerHTML = `
+    <div style="text-align:center; padding:60px 20px; color:#6b7280;">
+      <div style="font-size:36px; margin-bottom:16px; animation:spin 1s linear infinite; display:inline-block;">
+        <i class="fas fa-circle-notch" style="color:#f7931a;"></i>
+      </div>
+      <p style="font-size:14px;">코인 데이터 및 시그널 분석 중...</p>
+    </div>`
+  await loadCryptoData()
+}
+
+function renderCryptoSummary() {
+  const container = document.getElementById('crypto-summary-cards')
+  if (!container || !cryptoData.length) return
+
+  const totalBuy   = cryptoData.reduce((s, c) => s + c.buyCount, 0)
+  const totalSell  = cryptoData.reduce((s, c) => s + c.sellCount, 0)
+  const totalHold  = cryptoData.reduce((s, c) => s + c.holdCount, 0)
+  const totalSigs  = cryptoData.length * 6
+  const dominantBuy  = cryptoData.filter(c => c.overallSignal === 'BUY').length
+  const dominantSell = cryptoData.filter(c => c.overallSignal === 'SELL').length
+  const dominantHold = cryptoData.filter(c => c.overallSignal === 'HOLD').length
+  const marketSentiment = dominantBuy > dominantSell ? '📈 강세' : dominantBuy < dominantSell ? '📉 약세' : '➡️ 중립'
+  const sentColor = dominantBuy > dominantSell ? '#22c55e' : dominantBuy < dominantSell ? '#ef4444' : '#f59e0b'
+  const btc  = cryptoData.find(c => c.symbol === 'BTC')
+  const eth  = cryptoData.find(c => c.symbol === 'ETH')
+  const buyPct  = totalSigs ? Math.round(totalBuy  / totalSigs * 100) : 0
+  const sellPct = totalSigs ? Math.round(totalSell / totalSigs * 100) : 0
+  const holdPct = 100 - buyPct - sellPct
+
+  container.innerHTML = `
+    <!-- 시장 심리 -->
+    <div style="background:${dominantBuy>dominantSell?'rgba(34,197,94,0.07)':dominantBuy<dominantSell?'rgba(239,68,68,0.07)':'rgba(245,158,11,0.07)'}; border:1px solid ${sentColor}30; border-radius:16px; padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">시장 심리</span>
+        <i class="fas fa-brain" style="font-size:13px; color:${sentColor};"></i>
+      </div>
+      <div style="font-size:20px; font-weight:800; color:${sentColor}; line-height:1.2;">${marketSentiment}</div>
+      <div style="font-size:11px; color:#6b7280; margin-top:6px;">매수 ${dominantBuy}코인 · 관망 ${dominantHold}코인 · 매도 ${dominantSell}코인</div>
+      <div style="display:flex; gap:3px; margin-top:10px; border-radius:4px; overflow:hidden; height:5px;">
+        <div style="flex:${dominantBuy}; background:#22c55e; border-radius:4px 0 0 4px;"></div>
+        <div style="flex:${dominantHold}; background:#f59e0b;"></div>
+        <div style="flex:${dominantSell}; background:#ef4444; border-radius:0 4px 4px 0;"></div>
+      </div>
+    </div>
+    <!-- 시그널 분포 -->
+    <div style="background:rgba(99,102,241,0.07); border:1px solid rgba(99,102,241,0.2); border-radius:16px; padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">시그널 분포</span>
+        <i class="fas fa-chart-pie" style="font-size:13px; color:#818cf8;"></i>
+      </div>
+      <div style="display:flex; align-items:baseline; gap:8px;">
+        <span style="font-size:22px; font-weight:800; color:#22c55e;">${totalBuy}</span>
+        <span style="font-size:11px; color:#6b7280;">매수</span>
+        <span style="font-size:22px; font-weight:800; color:#f59e0b;">${totalHold}</span>
+        <span style="font-size:11px; color:#6b7280;">관망</span>
+        <span style="font-size:22px; font-weight:800; color:#ef4444;">${totalSell}</span>
+        <span style="font-size:11px; color:#6b7280;">매도</span>
+      </div>
+      <div style="font-size:11px; color:#6b7280; margin-top:6px;">전체 ${totalSigs}개 시그널 기준</div>
+      <div style="display:flex; gap:3px; margin-top:10px; border-radius:4px; overflow:hidden; height:5px;">
+        <div style="flex:${buyPct}; background:#22c55e;"></div>
+        <div style="flex:${holdPct}; background:#f59e0b;"></div>
+        <div style="flex:${sellPct}; background:#ef4444;"></div>
+      </div>
+    </div>
+    <!-- BTC -->
+    <div style="background:rgba(247,147,26,0.07); border:1px solid rgba(247,147,26,0.2); border-radius:16px; padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Bitcoin</span>
+        <i class="fab fa-bitcoin" style="font-size:15px; color:#f7931a;"></i>
+      </div>
+      ${btc ? `
+        <div style="font-size:20px; font-weight:800; color:white;">${btc.price >= 1000 ? '$' + btc.price.toLocaleString(undefined,{maximumFractionDigits:0}) : '$' + btc.price.toFixed(2)}</div>
+        <div style="font-size:13px; font-weight:700; color:${btc.change24h>=0?'#22c55e':'#ef4444'}; margin-top:4px;">
+          ${btc.change24h>=0?'▲':'▼'} ${Math.abs(btc.change24h).toFixed(2)}% <span style="font-size:11px; color:#6b7280; font-weight:400;">24h</span>
+        </div>
+        <div style="margin-top:8px; display:inline-flex; align-items:center; gap:5px; background:${btc.overallSignal==='BUY'?'rgba(34,197,94,0.12)':btc.overallSignal==='SELL'?'rgba(239,68,68,0.12)':'rgba(245,158,11,0.12)'}; border:1px solid ${btc.overallSignal==='BUY'?'rgba(34,197,94,0.3)':btc.overallSignal==='SELL'?'rgba(239,68,68,0.3)':'rgba(245,158,11,0.3)'}; border-radius:8px; padding:4px 10px;">
+          <span style="font-size:11px; font-weight:800; color:${btc.overallSignal==='BUY'?'#22c55e':btc.overallSignal==='SELL'?'#ef4444':'#f59e0b'};">${btc.overallSignal==='BUY'?'매수 우세':btc.overallSignal==='SELL'?'매도 우세':'관망 우세'}</span>
+        </div>
+      ` : '<div style="color:#6b7280; font-size:13px;">로딩 중...</div>'}
+    </div>
+    <!-- ETH -->
+    <div style="background:rgba(130,71,229,0.07); border:1px solid rgba(130,71,229,0.2); border-radius:16px; padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Ethereum</span>
+        <i class="fab fa-ethereum" style="font-size:15px; color:#8247e5;"></i>
+      </div>
+      ${eth ? `
+        <div style="font-size:20px; font-weight:800; color:white;">$${eth.price.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+        <div style="font-size:13px; font-weight:700; color:${eth.change24h>=0?'#22c55e':'#ef4444'}; margin-top:4px;">
+          ${eth.change24h>=0?'▲':'▼'} ${Math.abs(eth.change24h).toFixed(2)}% <span style="font-size:11px; color:#6b7280; font-weight:400;">24h</span>
+        </div>
+        <div style="margin-top:8px; display:inline-flex; align-items:center; gap:5px; background:${eth.overallSignal==='BUY'?'rgba(34,197,94,0.12)':eth.overallSignal==='SELL'?'rgba(239,68,68,0.12)':'rgba(245,158,11,0.12)'}; border:1px solid ${eth.overallSignal==='BUY'?'rgba(34,197,94,0.3)':eth.overallSignal==='SELL'?'rgba(239,68,68,0.3)':'rgba(245,158,11,0.3)'}; border-radius:8px; padding:4px 10px;">
+          <span style="font-size:11px; font-weight:800; color:${eth.overallSignal==='BUY'?'#22c55e':eth.overallSignal==='SELL'?'#ef4444':'#f59e0b'};">${eth.overallSignal==='BUY'?'매수 우세':eth.overallSignal==='SELL'?'매도 우세':'관망 우세'}</span>
+        </div>
+      ` : '<div style="color:#6b7280; font-size:13px;">로딩 중...</div>'}
+    </div>
+  `
+}
+
+function renderCryptoCards() {
+  const container = document.getElementById('crypto-cards-grid')
+  if (!container || !cryptoData.length) return
+
+  container.innerHTML = cryptoData.map((coin, idx) => renderCoinCard(coin, idx)).join('')
+
+  cryptoData.forEach(coin => {
+    drawSparkline(`sparkline-${coin.id}`, coin.sparkline, coin.change24h >= 0)
+  })
+}
+
+function renderCoinCard(coin, idx) {
+  const isUp = coin.change24h >= 0
+  const priceColor = isUp ? '#22c55e' : '#ef4444'
+  const overallColor = coin.overallSignal === 'BUY' ? '#22c55e' : coin.overallSignal === 'SELL' ? '#ef4444' : '#f59e0b'
+  const overallBg = coin.overallSignal === 'BUY' ? 'rgba(34,197,94,0.12)' : coin.overallSignal === 'SELL' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)'
+  const overallBorder = coin.overallSignal === 'BUY' ? 'rgba(34,197,94,0.3)' : coin.overallSignal === 'SELL' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'
+  const overallLabel = coin.overallSignal === 'BUY' ? '매수' : coin.overallSignal === 'SELL' ? '매도' : '관망'
+  const overallIcon = coin.overallSignal === 'BUY' ? 'fa-arrow-trend-up' : coin.overallSignal === 'SELL' ? 'fa-arrow-trend-down' : 'fa-minus'
+
+  const formatPrice = (p) => {
+    if (!p && p !== 0) return '-'
+    if (p >= 1000) return `$${p.toLocaleString(undefined, {maximumFractionDigits:0})}`
+    if (p >= 1) return `$${p.toFixed(2)}`
+    if (p >= 0.01) return `$${p.toFixed(4)}`
+    return `$${p.toFixed(6)}`
+  }
+
+  const formatCap = (n) => {
+    if (!n) return '-'
+    if (n >= 1e12) return `$${(n/1e12).toFixed(2)}T`
+    if (n >= 1e9)  return `$${(n/1e9).toFixed(1)}B`
+    if (n >= 1e6)  return `$${(n/1e6).toFixed(0)}M`
+    return `$${n.toLocaleString()}`
+  }
+
+  const range24 = coin.high24h - coin.low24h
+  const pos24 = range24 > 0 ? Math.max(0, Math.min(100, ((coin.price - coin.low24h) / range24) * 100)) : 50
+
+  // 시간대별 시그널 카드 (6개) - 모바일 반응형 그리드
+  const signalCards = coin.signals.map(sig => {
+    const sc   = sig.signal === 'BUY' ? '#22c55e' : sig.signal === 'SELL' ? '#ef4444' : '#f59e0b'
+    const bg   = sig.signal === 'BUY' ? 'rgba(34,197,94,0.07)' : sig.signal === 'SELL' ? 'rgba(239,68,68,0.07)' : 'rgba(245,158,11,0.05)'
+    const bdr  = sig.signal === 'BUY' ? 'rgba(34,197,94,0.2)' : sig.signal === 'SELL' ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.15)'
+    const icon = sig.signal === 'BUY' ? 'fa-arrow-trend-up' : sig.signal === 'SELL' ? 'fa-arrow-trend-down' : 'fa-minus'
+    const label = sig.signal === 'BUY' ? '매수' : sig.signal === 'SELL' ? '매도' : '관망'
+    const confColor = sig.confidence >= 75 ? '#22c55e' : sig.confidence >= 55 ? '#f59e0b' : '#9ca3af'
+    const priceDiff = sig.signal !== 'HOLD' ? ((sig.targetPrice - coin.price) / coin.price * 100) : 0
+    const priceDiffStr = priceDiff >= 0 ? `+${priceDiff.toFixed(1)}%` : `${priceDiff.toFixed(1)}%`
+
+    return `
+      <div style="background:${bg}; border:1px solid ${bdr}; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px; min-width:0;">
+        <!-- 시간 + 시그널 -->
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+          <span style="font-size:11px; font-weight:700; color:#9ca3af; white-space:nowrap;">${sig.label}</span>
+          <span style="background:${bg}; border:1px solid ${bdr}; color:${sc}; font-size:12px; font-weight:900; padding:3px 10px; border-radius:20px; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; letter-spacing:0.04em;">
+            <i class="fas ${icon}" style="font-size:9px;"></i> ${label}
+          </span>
+        </div>
+        <!-- 신뢰도 바 -->
+        <div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="font-size:10px; color:#6b7280;">신뢰도</span>
+            <span style="font-size:10px; color:${confColor}; font-weight:700;">${sig.confidence}%</span>
+          </div>
+          <div style="height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden;">
+            <div style="width:${sig.confidence}%; height:100%; background:${confColor}; border-radius:2px; transition:width 0.5s;"></div>
+          </div>
+        </div>
+        <!-- 목표가 / 손절가 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <div style="background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.12); border-radius:8px; padding:6px 8px;">
+            <div style="font-size:9px; color:#4b5563; margin-bottom:2px; font-weight:600;">목표가</div>
+            <div style="font-size:11px; font-weight:700; color:#22c55e;">${formatPrice(sig.targetPrice)}</div>
+          </div>
+          <div style="background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.12); border-radius:8px; padding:6px 8px;">
+            <div style="font-size:9px; color:#4b5563; margin-bottom:2px; font-weight:600;">손절가</div>
+            <div style="font-size:11px; font-weight:700; color:#ef4444;">${formatPrice(sig.stopLoss)}</div>
+          </div>
+        </div>
+        <!-- 근거 -->
+        <div style="font-size:10px; color:#6b7280; line-height:1.5; min-height:28px;" title="${sig.reason.join(' / ')}">
+          ${sig.reason.slice(0,2).join(' · ')}
+        </div>
+      </div>
+    `
+  }).join('')
+
+  return `
+    <div class="crypto-card" style="background:rgba(16,20,28,0.97); border:1px solid rgba(255,255,255,0.07); border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.35);">
+
+      <!-- ── 코인 헤더 ─────────────────────────── -->
+      <div style="padding:18px 20px 16px; background:linear-gradient(135deg,rgba(247,147,26,0.06),transparent); border-bottom:1px solid rgba(255,255,255,0.05);">
+        <div style="display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap;">
+
+          <!-- 랭크 + 아이콘 + 이름 -->
+          <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:180px;">
+            <div style="position:relative; flex-shrink:0;">
+              <div style="width:46px; height:46px; border-radius:50%; background:rgba(247,147,26,0.1); border:1.5px solid rgba(247,147,26,0.25); display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                <img src="${coin.image}" alt="${coin.symbol}" style="width:38px; height:38px; border-radius:50%;"
+                  onerror="this.style.display='none'; this.parentNode.innerHTML='<span style=\\'font-size:15px; font-weight:800; color:#f7931a;\\'>${coin.symbol.slice(0,2)}</span>'">
+              </div>
+              <div style="position:absolute; bottom:-3px; right:-5px; background:#0f1320; border:1px solid rgba(247,147,26,0.4); border-radius:5px; font-size:9px; font-weight:800; color:#f7931a; padding:0 5px; line-height:17px;">#${coin.rank}</div>
+            </div>
+            <div>
+              <div style="font-size:18px; font-weight:800; color:white; line-height:1.1; letter-spacing:0.02em;">${coin.symbol}</div>
+              <div style="font-size:12px; color:#6b7280; margin-top:2px;">${coin.name}</div>
+            </div>
+          </div>
+
+          <!-- 가격 블록 -->
+          <div style="text-align:right; min-width:140px;">
+            <div style="font-size:clamp(17px,2.2vw,24px); font-weight:800; color:white; letter-spacing:-0.01em;">${formatPrice(coin.price)}</div>
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:4px; flex-wrap:wrap;">
+              <span style="font-size:11px; color:${coin.change1h>=0?'#22c55e':'#ef4444'}; font-weight:600; background:${coin.change1h>=0?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'}; padding:1px 7px; border-radius:4px;">
+                1h ${coin.change1h>=0?'+':''}${coin.change1h.toFixed(2)}%
+              </span>
+              <span style="font-size:13px; font-weight:800; color:${priceColor}; background:${isUp?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'}; padding:2px 8px; border-radius:5px;">
+                ${isUp ? '▲' : '▼'} ${Math.abs(coin.change24h).toFixed(2)}%
+              </span>
+              <span style="font-size:11px; color:${coin.change7d>=0?'#22c55e':'#ef4444'}; font-weight:600; background:${coin.change7d>=0?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'}; padding:1px 7px; border-radius:4px;">
+                7d ${coin.change7d>=0?'+':''}${coin.change7d.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          <!-- 스파크라인 -->
+          <div class="crypto-sparkline" style="width:100px; height:44px; flex-shrink:0; align-self:center;">
+            <canvas id="sparkline-${coin.id}" width="100" height="44" style="width:100px; height:44px;"></canvas>
+          </div>
+
+          <!-- 시총/거래량 -->
+          <div style="text-align:right; min-width:110px;">
+            <div style="font-size:10px; color:#4b5563; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:3px;">시가총액</div>
+            <div style="font-size:14px; font-weight:700; color:#e5e7eb;">${formatCap(coin.marketCap)}</div>
+            <div style="font-size:10px; color:#4b5563; margin-top:3px;">거래량 ${formatCap(coin.volume24h)}</div>
+          </div>
+
+          <!-- 종합 시그널 배지 -->
+          <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:90px; align-self:center;">
+            <div style="font-size:9px; color:#4b5563; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px;">종합 판단</div>
+            <div style="background:${overallBg}; border:2px solid ${overallBorder}; border-radius:12px; padding:10px 16px; text-align:center;">
+              <div style="display:flex; align-items:center; gap:6px; justify-content:center; margin-bottom:4px;">
+                <i class="fas ${overallIcon}" style="font-size:12px; color:${overallColor};"></i>
+                <span style="font-size:16px; font-weight:900; color:${overallColor}; letter-spacing:0.05em;">${overallLabel}</span>
+              </div>
+              <div style="font-size:10px; color:#6b7280;">
+                <span style="color:#22c55e; font-weight:700;">${coin.buyCount}</span>매·
+                <span style="color:#f59e0b; font-weight:700;">${coin.holdCount}</span>관·
+                <span style="color:#ef4444; font-weight:700;">${coin.sellCount}</span>도
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 24h 가격 레인지 바 -->
+        <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.04);">
+          <div style="display:flex; align-items:center; gap:10px; font-size:11px; color:#6b7280;">
+            <span style="white-space:nowrap; color:#9ca3af;">저 ${formatPrice(coin.low24h)}</span>
+            <div style="flex:1; height:5px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:visible; position:relative;">
+              <div style="position:absolute; left:0; top:0; height:100%; width:${pos24}%; background:linear-gradient(90deg,#3b82f6,#f7931a); border-radius:3px;"></div>
+              <div style="position:absolute; left:calc(${Math.min(96, pos24)}% - 4px); top:-2px; width:9px; height:9px; background:#f7931a; border-radius:50%; border:2px solid #0f1320; box-shadow:0 0 6px rgba(247,147,26,0.5);"></div>
+            </div>
+            <span style="white-space:nowrap; color:#9ca3af;">고 ${formatPrice(coin.high24h)}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 시간대별 시그널 그리드 ──────────────── -->
+      <div style="padding:16px 18px 18px;">
+        <div style="font-size:11px; color:#4b5563; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+          <i class="fas fa-clock" style="color:#f7931a; font-size:10px;"></i>
+          시간대별 AI 매매 시그널
+        </div>
+        <div class="crypto-signal-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+          ${signalCards}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function drawSparkline(canvasId, prices, isPositive) {
+  const canvas = document.getElementById(canvasId)
+  if (!canvas || !prices || prices.length < 2) return
+  const ctx = canvas.getContext('2d')
+  const W = canvas.width, H = canvas.height
+  ctx.clearRect(0, 0, W, H)
+
+  const min = Math.min(...prices), max = Math.max(...prices)
+  const range = max - min || 1
+  const pts = prices.map((p, i) => ({
+    x: (i / (prices.length - 1)) * W,
+    y: H - ((p - min) / range) * (H - 6) - 3,
+  }))
+
+  // 그라디언트 영역
+  const grad = ctx.createLinearGradient(0, 0, 0, H)
+  const c = isPositive ? '34,197,94' : '239,68,68'
+  grad.addColorStop(0, `rgba(${c},0.25)`)
+  grad.addColorStop(1, `rgba(${c},0)`)
+
+  ctx.beginPath()
+  ctx.moveTo(pts[0].x, pts[0].y)
+  for (let i = 1; i < pts.length; i++) {
+    const cp1x = (pts[i-1].x + pts[i].x) / 2
+    ctx.bezierCurveTo(cp1x, pts[i-1].y, cp1x, pts[i].y, pts[i].x, pts[i].y)
+  }
+  ctx.lineTo(W, H)
+  ctx.lineTo(0, H)
+  ctx.closePath()
+  ctx.fillStyle = grad
+  ctx.fill()
+
+  // 라인
+  ctx.beginPath()
+  ctx.moveTo(pts[0].x, pts[0].y)
+  for (let i = 1; i < pts.length; i++) {
+    const cp1x = (pts[i-1].x + pts[i].x) / 2
+    ctx.bezierCurveTo(cp1x, pts[i-1].y, cp1x, pts[i].y, pts[i].x, pts[i].y)
+  }
+  ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444'
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+
+  // 마지막 점
+  const last = pts[pts.length - 1]
+  ctx.beginPath()
+  ctx.arc(last.x, last.y, 3, 0, Math.PI * 2)
+  ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444'
+  ctx.fill()
 }
 
 // ============================================================
