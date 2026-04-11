@@ -27,6 +27,94 @@ const userAuth = async (c: any, next: any) => {
   await next()
 }
 
+// ─── /ticker 는 인증 불필요 (공개 API) - use('/*') 보다 먼저 등록 ──────────────
+const TICKER_STOCKS_PUBLIC = [
+  { code: '005930', name: '삼성전자' },
+  { code: '000660', name: 'SK하이닉스' },
+  { code: '005380', name: '현대차' },
+  { code: '035420', name: 'NAVER' },
+  { code: '005490', name: 'POSCO홀딩스' },
+  { code: '051910', name: 'LG화학' },
+  { code: '006400', name: '삼성SDI' },
+  { code: '207940', name: '삼성바이오로직스' },
+  { code: '035720', name: '카카오' },
+  { code: '068270', name: '셀트리온' },
+  { code: '000270', name: '기아' },
+  { code: '105560', name: 'KB금융' },
+  { code: '373220', name: 'LG에너지솔루션' },
+  { code: '012330', name: '현대모비스' },
+  { code: '028260', name: '삼성물산' },
+  { code: '003550', name: 'LG' },
+  { code: '066570', name: 'LG전자' },
+  { code: '032830', name: '삼성생명' },
+  { code: '096770', name: 'SK이노베이션' },
+  { code: '011200', name: 'HMM' },
+]
+
+stockRoutes.get('/ticker', async (c) => {
+  try {
+    const kv = c.env.STOCK_CACHE
+    const cacheKey = 'ticker_realtime_v2'
+    const CACHE_TTL = 30
+
+    if (kv) {
+      try {
+        const cached = await kv.get(cacheKey, 'json') as any
+        if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL * 1000) {
+          return c.json({ success: true, data: cached.data, cached: true })
+        }
+      } catch {}
+    }
+
+    const codes = TICKER_STOCKS_PUBLIC.map(s => s.code)
+    const url = `https://polling.finance.naver.com/api/realtime/domestic/stock/${codes.join(',')}`
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://m.stock.naver.com/',
+        'Accept': 'application/json',
+      }
+    })
+
+    if (!res.ok) throw new Error(`Naver API ${res.status}`)
+    const body: any = await res.json()
+    const datas = body.datas || []
+
+    const priceMap = new Map<string, any>()
+    for (const item of datas) {
+      const code = item.itemCode || ''
+      const price = Number(item.closePriceRaw) || 0
+      if (code && price > 0) {
+        const dir = item.compareToPreviousPrice?.code || '3'
+        const rawChange = Number(item.compareToPreviousClosePriceRaw) || 0
+        const isDown = dir === '4' || dir === '1'
+        priceMap.set(code, {
+          price,
+          change:     isDown ? -Math.abs(rawChange) : Math.abs(rawChange),
+          changeRate: isDown
+            ? -Math.abs(Number(item.fluctuationsRatioRaw) || 0)
+            :  Math.abs(Number(item.fluctuationsRatioRaw) || 0),
+        })
+      }
+    }
+
+    const data = TICKER_STOCKS_PUBLIC.map(s => {
+      const p = priceMap.get(s.code)
+      return { code: s.code, name: s.name, price: p?.price ?? 0, change: p?.change ?? 0, changeRate: p?.changeRate ?? 0 }
+    }).filter(s => s.price > 0)
+
+    if (kv && data.length > 0) {
+      try {
+        await kv.put(cacheKey, JSON.stringify({ data, ts: Date.now() }), { expirationTtl: 300 })
+      } catch {}
+    }
+
+    return c.json({ success: true, data, cached: false })
+  } catch (err: any) {
+    return c.json({ success: false, message: err.message }, 500)
+  }
+})
+
 stockRoutes.use('/*', userAuth)
 
 // ─── 키움 REST API 설정 ────────────────────────────────────────────────────────

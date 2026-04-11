@@ -596,35 +596,8 @@ function renderUserLayout(page, params) {
       background:rgba(8,13,20,0.95); border-bottom:1px solid rgba(249,115,22,0.08);
       overflow:hidden; white-space:nowrap; height:30px; display:flex; align-items:center;
     ">
-      <div style="display:inline-block; animation:ticker 40s linear infinite; padding-left:100%;">
-        <span style="font-size:11px; color:#9ca3af;">
-          삼성전자&nbsp;<span style="color:#ef4444;">▲ 72,500</span>&nbsp;<span style="color:#4b5563;">(+1.68%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          SK하이닉스&nbsp;<span style="color:#3b82f6;">▼ 185,000</span>&nbsp;<span style="color:#4b5563;">(-1.33%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          에코프로비엠&nbsp;<span style="color:#ef4444;">▲ 115,000</span>&nbsp;<span style="color:#4b5563;">(+7.97%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          HLB&nbsp;<span style="color:#ef4444;">▲ 95,000</span>&nbsp;<span style="color:#4b5563;">(+14.46%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          NAVER&nbsp;<span style="color:#3b82f6;">▼ 198,000</span>&nbsp;<span style="color:#4b5563;">(-1.49%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          현대차&nbsp;<span style="color:#ef4444;">▲ 235,000</span>&nbsp;<span style="color:#4b5563;">(+1.29%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          셀트리온&nbsp;<span style="color:#ef4444;">▲ 175,000</span>&nbsp;<span style="color:#4b5563;">(+2.94%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          카카오&nbsp;<span style="color:#3b82f6;">▼ 42,000</span>&nbsp;<span style="color:#4b5563;">(-1.18%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          알테오젠&nbsp;<span style="color:#ef4444;">▲ 285,000</span>&nbsp;<span style="color:#4b5563;">(+6.74%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          루닛&nbsp;<span style="color:#ef4444;">▲ 58,000</span>&nbsp;<span style="color:#4b5563;">(+8.41%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          레인보우로보틱스&nbsp;<span style="color:#ef4444;">▲ 185,000</span>&nbsp;<span style="color:#4b5563;">(+6.92%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          삼성SDI&nbsp;<span style="color:#3b82f6;">▼ 325,000</span>&nbsp;<span style="color:#4b5563;">(-1.52%)</span>
-          &nbsp;&nbsp;│&nbsp;&nbsp;
-          LG에너지솔루션&nbsp;<span style="color:#ef4444;">▲ 385,000</span>&nbsp;<span style="color:#4b5563;">(+2.26%)</span>
-          &nbsp;&nbsp;&nbsp;&nbsp;
-        </span>
+      <div id="ticker-inner" style="display:inline-block; animation:ticker 60s linear infinite; padding-left:100%;">
+        <span style="font-size:11px; color:#6b7280;">시세 로딩 중...</span>
       </div>
     </div>
 
@@ -711,6 +684,9 @@ function renderUserLayout(page, params) {
   else if (page === 'crypto') renderCrypto()
   else if (page === 'settings') renderSettings()
   else renderDashboard()
+
+  // 티커 바 실시간 시세 초기화
+  initTicker()
 }
 
 function toggleSidebar() {
@@ -2187,6 +2163,9 @@ function renderAdminLayout(page, params) {
   else if (page === 'news') renderNews()
   else if (page === 'settings') renderSettings()
   else renderAdminDashboard()
+
+  // 티커 바 실시간 시세 초기화
+  initTicker()
 }
 
 // ============================================================
@@ -3376,6 +3355,71 @@ function renderAdminSettings() {
       text.style.color = lv.color
     })
   }
+}
+
+// ============================================================
+// TICKER BAR - 실시간 주가 시세 (상단 스크롤 배너)
+// ============================================================
+let tickerRefreshTimer = null
+
+async function initTicker() {
+  // 기존 타이머 정리
+  if (tickerRefreshTimer) { clearInterval(tickerRefreshTimer); tickerRefreshTimer = null }
+
+  await loadTickerData()
+
+  // 60초마다 자동 갱신
+  tickerRefreshTimer = setInterval(() => {
+    if (document.getElementById('ticker-inner')) loadTickerData()
+    else { clearInterval(tickerRefreshTimer); tickerRefreshTimer = null }
+  }, 60000)
+}
+
+async function loadTickerData() {
+  try {
+    const res = await fetch(`${API_BASE}/stocks/ticker`, {
+      headers: localStorage.getItem('token')
+        ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        : {}
+    })
+    const json = await res.json()
+    if (!json.success || !json.data?.length) return
+
+    renderTickerBar(json.data)
+  } catch (e) {
+    // 실패 시 기존 표시 유지
+  }
+}
+
+function renderTickerBar(stocks) {
+  const inner = document.getElementById('ticker-inner')
+  if (!inner) return
+
+  // 종목 HTML 생성 (두 번 반복해서 끊김 없이 루프)
+  const buildItems = () => stocks.map(s => {
+    const up = s.changeRate >= 0
+    const arrow = up ? '▲' : '▼'
+    const rateColor = up ? '#ef4444' : '#3b82f6'
+    const sign = up ? '+' : ''
+    const price = s.price.toLocaleString()
+    const rate = `${sign}${s.changeRate.toFixed(2)}%`
+    return `<span style="margin:0 10px; white-space:nowrap;">` +
+      `<span style="color:#9ca3af; font-size:11px;">${s.name}</span>` +
+      `&nbsp;<span style="color:white; font-size:11px; font-weight:600;">${price}</span>` +
+      `&nbsp;<span style="color:${rateColor}; font-size:11px; font-weight:700;">${arrow} ${rate}</span>` +
+      `</span><span style="color:rgba(249,115,22,0.25); font-size:11px;">│</span>`
+  }).join('')
+
+  // 끊김없는 루프를 위해 두 세트 이어붙이기
+  const items = buildItems() + '&nbsp;&nbsp;&nbsp;&nbsp;' + buildItems()
+  inner.innerHTML = items
+
+  // 종목 수에 비례해서 애니메이션 속도 조정 (종목 1개당 약 3초)
+  const duration = Math.max(40, stocks.length * 3)
+  inner.style.animation = 'none'
+  // reflow 강제 후 애니메이션 재시작
+  void inner.offsetWidth
+  inner.style.animation = `ticker ${duration}s linear infinite`
 }
 
 // ============================================================
