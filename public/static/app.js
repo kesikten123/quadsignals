@@ -52,6 +52,54 @@ const api = {
 }
 
 // ============================================================
+// 실시간 가격 Flash 유틸리티 (상승=빨강, 하락=파랑)
+// ============================================================
+;(function injectPriceFlashCSS() {
+  if (document.getElementById('price-flash-style')) return
+  const s = document.createElement('style')
+  s.id = 'price-flash-style'
+  s.textContent = `
+    @keyframes flashUp   { 0%{background:rgba(239,68,68,0.35)} 100%{background:transparent} }
+    @keyframes flashDown { 0%{background:rgba(59,130,246,0.35)} 100%{background:transparent} }
+    @keyframes flashNeutral { 0%{background:rgba(245,158,11,0.25)} 100%{background:transparent} }
+    @keyframes flashRowUp   { 0%{background:rgba(239,68,68,0.22)} 100%{background:transparent} }
+    @keyframes flashRowDown { 0%{background:rgba(59,130,246,0.22)} 100%{background:transparent} }
+    .flash-up   { animation: flashUp   0.7s ease-out; border-radius:4px; }
+    .flash-down { animation: flashDown 0.7s ease-out; border-radius:4px; }
+    .flash-neutral { animation: flashNeutral 0.5s ease-out; border-radius:4px; }
+    .flash-row-up   { animation: flashRowUp   0.9s ease-out !important; }
+    .flash-row-down { animation: flashRowDown 0.9s ease-out !important; }
+    .price-up   { color: #ef4444 !important; }
+    .price-down { color: #3b82f6 !important; }
+    .price-flat { color: #9ca3af !important; }
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    @keyframes cryptoPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+    @keyframes pricePop { 0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)} }
+    @keyframes glow { 0%,100%{box-shadow:0 0 4px rgba(34,197,94,0.5)} 50%{box-shadow:0 0 10px rgba(34,197,94,0.9)} }
+    .market-timer-badge {
+      display:inline-flex; align-items:center; gap:5px;
+      background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);
+      border-radius:16px; padding:5px 10px; font-size:10px; color:#22c55e; font-weight:700;
+    }
+  `
+  document.head.appendChild(s)
+})()
+
+// 이전 가격 저장소 (코드 → 가격)
+const _prevPriceMap = {}
+
+// 엘리먼트에 가격 플래시 효과 적용
+function flashPriceElement(el, newPrice, oldPrice) {
+  if (!el) return
+  el.classList.remove('flash-up','flash-down','flash-neutral')
+  void el.offsetWidth // reflow
+  if (newPrice > oldPrice)       el.classList.add('flash-up')
+  else if (newPrice < oldPrice)  el.classList.add('flash-down')
+  else                           el.classList.add('flash-neutral')
+  setTimeout(() => el.classList.remove('flash-up','flash-down','flash-neutral'), 700)
+}
+
+// ============================================================
 // Toast Notifications
 // ============================================================
 function showToast(message, type = 'success') {
@@ -70,6 +118,24 @@ async function navigate(page, params = {}) {
   if (page !== 'news') {
     if (newsRefreshTimer)    { clearInterval(newsRefreshTimer);    newsRefreshTimer = null }
     if (newsTimeUpdateTimer) { clearInterval(newsTimeUpdateTimer); newsTimeUpdateTimer = null }
+  }
+  // ── 시장 페이지 이탈 시 실시간 가격 폴링 중단 ──
+  if (page !== 'kospi' && page !== 'kosdaq') {
+    if (typeof marketPricePoller !== 'undefined' && marketPricePoller) {
+      clearInterval(marketPricePoller); marketPricePoller = null
+    }
+    if (typeof _mktPollCountdownTimer !== 'undefined' && _mktPollCountdownTimer) {
+      clearInterval(_mktPollCountdownTimer); _mktPollCountdownTimer = null
+    }
+  }
+  // ── 코인 페이지 이탈 시 타이머 정리 ──
+  if (page !== 'crypto') {
+    if (typeof cryptoAutoRefreshTimer !== 'undefined' && cryptoAutoRefreshTimer) {
+      clearInterval(cryptoAutoRefreshTimer); cryptoAutoRefreshTimer = null
+    }
+    if (typeof cryptoCountdownTimer !== 'undefined' && cryptoCountdownTimer) {
+      clearInterval(cryptoCountdownTimer); cryptoCountdownTimer = null
+    }
   }
 
   currentPage = page
@@ -1028,38 +1094,55 @@ async function loadSignals(market, signal) {
       </div>
 
       <!-- Stocks Grid -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%,260px), 1fr)); gap:12px;">
-        ${stocks.map(s => `
-          <div class="glass-card" style="padding:16px; cursor:pointer;" onclick="showStockDetail('${s.code}', '${s.name}')">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%,280px), 1fr)); gap:12px;">
+        ${stocks.map(s => {
+          const isUp = (s.changeRate||0) >= 0
+          const chgColor = isUp ? '#ef4444' : '#3b82f6'
+          const sigColor = s.signal==='BUY' ? '#22c55e' : s.signal==='SELL' ? '#ef4444' : '#f59e0b'
+          const sigBg = s.signal==='BUY' ? 'rgba(34,197,94,0.08)' : s.signal==='SELL' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)'
+          const reasons = s.reasons || []
+          return `
+          <div class="glass-card" style="padding:16px; cursor:pointer; border-left:3px solid ${sigColor}30; transition:transform 0.15s, box-shadow 0.15s;" 
+               onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px rgba(0,0,0,0.3)'"
+               onmouseout="this.style.transform='';this.style.boxShadow=''"
+               onclick="showStockDetail('${s.code}', '${s.name}')">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
               <div style="min-width:0;">
                 <div style="font-size:15px; font-weight:700; color:white; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.name}</div>
-                <div style="font-size:11px; color:#4b5563; margin-top:1px;">${s.code}</div>
+                <div style="font-size:10px; color:#4b5563; margin-top:1px;">${s.code} · <span style="${s.market === 'KOSPI' ? 'color:#60a5fa' : 'color:#c084fc'}">${s.market}</span></div>
               </div>
-              <span class="signal-${(s.signal||'HOLD').toLowerCase()}" style="flex-shrink:0; margin-left:8px;">${s.signal||'HOLD'}</span>
+              <div style="background:${sigBg}; border:1px solid ${sigColor}40; border-radius:8px; padding:4px 10px; text-align:center; flex-shrink:0; margin-left:8px;">
+                <div style="font-size:13px; font-weight:900; color:${sigColor}; letter-spacing:0.05em;">${s.signal==='BUY'?'매수':s.signal==='SELL'?'매도':'관망'}</div>
+                <div style="font-size:9px; color:#6b7280; margin-top:1px;">강도 ${s.strength||50}%</div>
+              </div>
             </div>
 
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-              <div>
-                <div style="font-size:20px; font-weight:800; color:white;">${(s.price||0).toLocaleString()}<span style="font-size:12px; color:#6b7280; font-weight:400;">원</span></div>
-                <div style="font-size:12px; margin-top:2px; color:${(s.changeRate||0) >= 0 ? '#ef4444' : '#3b82f6'}; font-weight:600;">
-                  ${(s.changeRate||0) >= 0 ? '▲' : '▼'} ${Math.abs(s.changeRate||0).toFixed(2)}%
-                </div>
+            <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:8px;">
+              <div style="font-size:20px; font-weight:800; color:white;">${(s.price||0).toLocaleString()}<span style="font-size:11px; color:#6b7280; font-weight:400; margin-left:2px;">원</span></div>
+              <div style="font-size:13px; font-weight:700; color:${chgColor};">
+                ${isUp ? '▲' : '▼'} ${Math.abs(s.changeRate||0).toFixed(2)}%
               </div>
-              <span class="${s.market === 'KOSPI' ? 'badge-kospi' : 'badge-kosdaq'}">${s.market}</span>
             </div>
 
-            <div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                <span style="font-size:11px; color:#6b7280;">시그널 강도</span>
-                <span style="font-size:11px; font-weight:700; color:${(s.signal==='BUY') ? '#22c55e' : (s.signal==='SELL') ? '#ef4444' : '#f59e0b'};">${s.strength||50}%</span>
-              </div>
-              <div class="strength-bar">
-                <div class="strength-fill" style="width:${s.strength||50}%; background:${(s.signal==='BUY') ? 'linear-gradient(90deg,#16a34a,#22c55e)' : (s.signal==='SELL') ? 'linear-gradient(90deg,#b91c1c,#ef4444)' : 'linear-gradient(90deg,#b45309,#f59e0b)'};"></div>
+            <!-- 시그널 강도 바 -->
+            <div style="margin-bottom:${reasons.length > 0 ? '10px' : '0'};">
+              <div style="height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden;">
+                <div style="width:${s.strength||50}%; height:100%; background:${s.signal==='BUY'?'linear-gradient(90deg,#16a34a,#22c55e)':s.signal==='SELL'?'linear-gradient(90deg,#b91c1c,#ef4444)':'linear-gradient(90deg,#b45309,#f59e0b)'}; border-radius:2px; transition:width 0.5s;"></div>
               </div>
             </div>
+
+            <!-- 추천 이유 -->
+            ${reasons.length > 0 ? `
+            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); border-radius:8px; padding:8px 10px;">
+              <div style="font-size:10px; color:#4b5563; font-weight:700; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.05em;">
+                <i class="fas fa-info-circle" style="margin-right:4px; color:${sigColor};"></i>시그널 근거
+              </div>
+              ${reasons.map(r => `<div style="font-size:11px; color:#9ca3af; line-height:1.5; display:flex; align-items:flex-start; gap:5px;">
+                <span style="color:${sigColor}; margin-top:1px; flex-shrink:0;">•</span>${r}
+              </div>`).join('')}
+            </div>` : ''}
           </div>
-        `).join('')}
+        `}).join('')}
       </div>
       
       ${stocks.length === 0 ? '<div style="text-align:center; color:#4b5563; padding:60px; font-size:16px;"><i class="fas fa-inbox" style="font-size:36px; display:block; margin-bottom:14px;"></i>해당 조건의 시그널이 없습니다</div>' : ''}
@@ -1076,6 +1159,9 @@ let marketAllStocks  = []   // 전체 종목 보관
 let marketFilteredStocks = [] // 필터 후 종목
 let marketCurrentPage = 1
 const MARKET_PAGE_SIZE = 100
+let marketPricePoller = null   // 실시간 가격 폴링 타이머
+let marketPrevPrices  = {}     // 이전 가격 (색상 깜빡임용)
+let marketCurrentMkt  = 'KOSPI' // 현재 시장
 
 async function renderMarket(market) {
   const content = document.getElementById('page-content')
@@ -1090,9 +1176,15 @@ async function renderMarket(market) {
         <span id="mkt-source-badge" style="font-size:11px; font-weight:700; color:#f59e0b; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.2); border-radius:6px; padding:2px 10px; display:none;">
           <i class="fas fa-satellite-dish" style="margin-right:4px;"></i>샘플
         </span>
+        <!-- 실시간 갱신 뱃지 -->
+        <div class="market-timer-badge" id="mkt-live-badge">
+          <div style="width:6px; height:6px; background:#22c55e; border-radius:50%; box-shadow:0 0 5px #22c55e; animation:glow 2s ease-in-out infinite;"></div>
+          <span>실시간</span>
+          <span id="mkt-poll-timer" style="color:#4b5563; font-weight:500; font-size:10px;"></span>
+        </div>
       </div>
       <p style="color:#6b7280; font-size:13px; margin-top:3px;">
-        ${isKospi ? '코스피' : '코스닥'} 상장 종목 실시간 시세 &amp; 시그널 분석
+        ${isKospi ? '코스피' : '코스닥'} 상장 종목 실시간 시세 &amp; 시그널 분석 · <span style="color:#4b5563;">30초마다 자동갱신</span>
         <span id="mkt-stock-count" style="color:${marketColor}; font-weight:700; margin-left:6px;">로딩 중...</span>
       </p>
     </div>
@@ -1200,10 +1292,105 @@ async function renderMarket(market) {
     // 초기 필터 적용
     applyMarketFilter()
 
+    // 실시간 가격 폴링 시작 (30초마다 가격만 갱신)
+    startMarketPricePoller(market)
+
   } catch (err) {
     document.getElementById('market-content').innerHTML =
       '<div style="color:#ef4444; padding:20px;"><i class="fas fa-exclamation-circle" style="margin-right:8px;"></i>데이터 로드 실패. 잠시 후 다시 시도해주세요.</div>'
   }
+}
+
+// ─── 실시간 가격 폴링 (30초마다 가격만 업데이트, 색상 깜빡임) ───────────────────
+let _mktPollCountdown = 30
+let _mktPollCountdownTimer = null
+
+function startMarketPricePoller(market) {
+  if (marketPricePoller) clearInterval(marketPricePoller)
+  if (_mktPollCountdownTimer) clearInterval(_mktPollCountdownTimer)
+  marketCurrentMkt = market
+  marketPrevPrices = {}
+  // 현재 데이터로 초기 가격 기록
+  marketAllStocks.forEach(s => { marketPrevPrices[s.code] = s.price })
+
+  _mktPollCountdown = 30
+  // 카운트다운 표시
+  _mktPollCountdownTimer = setInterval(() => {
+    const el = document.getElementById('mkt-poll-timer')
+    if (!el) { clearInterval(_mktPollCountdownTimer); return }
+    _mktPollCountdown = Math.max(0, _mktPollCountdown - 1)
+    el.textContent = `(${_mktPollCountdown}s)`
+  }, 1000)
+
+  marketPricePoller = setInterval(async () => {
+    if (!document.getElementById('market-content')) {
+      clearInterval(marketPricePoller)
+      clearInterval(_mktPollCountdownTimer)
+      marketPricePoller = null
+      return
+    }
+    _mktPollCountdown = 30
+    try {
+      const res = await api.get(`/stocks/${marketCurrentMkt.toLowerCase()}?limit=2000`)
+      if (!res.success || !res.stocks?.length) return
+      const newStocks = res.stocks
+      const priceChangedCodes = new Set()
+
+      // 가격 변동 감지
+      newStocks.forEach(ns => {
+        const prev = marketPrevPrices[ns.code]
+        if (prev !== undefined && prev !== ns.price) {
+          priceChangedCodes.add(ns.code)
+        }
+        marketPrevPrices[ns.code] = ns.price
+      })
+
+      // marketAllStocks 가격 업데이트
+      const newMap = new Map(newStocks.map(s => [s.code, s]))
+      marketAllStocks = marketAllStocks.map(s => newMap.has(s.code) ? { ...s, ...newMap.get(s.code) } : s)
+      // 필터 재적용 없이 테이블 행 직접 업데이트
+      updateMarketTablePrices(priceChangedCodes)
+      
+      const cntEl = document.getElementById('mkt-stock-count')
+      if (cntEl) cntEl.textContent = `총 ${marketAllStocks.length.toLocaleString()}종목 (실시간)`
+    } catch {}
+  }, 30000)
+}
+
+// 테이블 행의 가격/등락률만 직접 DOM 업데이트 (깜빡임 효과)
+function updateMarketTablePrices(changedCodes) {
+  marketFilteredStocks.forEach((s, i) => {
+    const ns = marketAllStocks.find(ms => ms.code === s.code)
+    if (!ns) return
+    // 변동된 데이터 반영
+    marketFilteredStocks[i] = { ...s, ...ns }
+    s = marketFilteredStocks[i]
+
+    const row = document.querySelector(`tr[data-code="${s.code}"]`)
+    if (!row) return
+
+    const isUp = (s.changeRate || 0) >= 0
+    const chgColor = isUp ? '#ef4444' : '#3b82f6'
+    const priceEl   = row.querySelector('.mkt-price')
+    const changeEl  = row.querySelector('.mkt-change')
+    const volumeEl  = row.querySelector('.mkt-volume')
+    if (priceEl)  priceEl.innerHTML  = s.price > 0 ? s.price.toLocaleString() + '<span style="font-size:10px; color:#6b7280; margin-left:2px;">원</span>' : '<span style="color:#4b5563; font-size:12px;">-</span>'
+    if (changeEl) {
+      changeEl.style.color = chgColor
+      changeEl.innerHTML = s.changeRate !== 0
+        ? `${(s.changeRate||0) >= 0 ? '▲' : '▼'} ${Math.abs(s.changeRate||0).toFixed(2)}%`
+        : '<span style="color:#6b7280">-</span>'
+    }
+    if (volumeEl) volumeEl.textContent = s.volume > 0 ? (s.volume||0).toLocaleString() : '-'
+
+    // 가격 변동 깜빡임 효과 (CSS 애니메이션)
+    if (changedCodes.has(s.code)) {
+      row.classList.remove('flash-row-up', 'flash-row-down')
+      void row.offsetWidth // reflow
+      row.classList.add(isUp ? 'flash-row-up' : 'flash-row-down')
+      setTimeout(() => row.classList.remove('flash-row-up', 'flash-row-down'), 900)
+    }
+  })
 }
 
 function applyMarketFilter() {
@@ -1280,19 +1467,24 @@ function renderMarketTable() {
           <tbody>
             ${page.map((s, idx) => {
               const rank = start + idx + 1
-              const chgColor = (s.changeRate||0) >= 0 ? '#ef4444' : '#3b82f6'
+              const isUp = (s.changeRate||0) >= 0
+              const chgColor = isUp ? '#ef4444' : '#3b82f6'
+              const reasonsHtml = (s.reasons||[]).length > 0
+                ? `<div style="font-size:10px; color:#6b7280; margin-top:2px; line-height:1.4;">${(s.reasons||[]).join(' · ')}</div>`
+                : ''
               return `
-              <tr onclick="showStockDetail('${s.code}', '${s.name}')" style="cursor:pointer;">
+              <tr data-code="${s.code}" onclick="showStockDetail('${s.code}', '${s.name}')" style="cursor:pointer; transition:background 0.3s;">
                 <td style="color:#4b5563; font-size:12px; font-weight:600;">${rank}</td>
                 <td>
                   <div style="font-weight:700; color:white; font-size:13px;">${s.name}</div>
                   <div style="font-size:10px; color:#4b5563; letter-spacing:0.03em;">${s.code}</div>
+                  ${reasonsHtml}
                 </td>
-                <td style="font-weight:700; color:white; white-space:nowrap; font-size:13px;">${s.price > 0 ? s.price.toLocaleString() + '<span style="font-size:10px; color:#6b7280; margin-left:2px;">원</span>' : '<span style="color:#4b5563; font-size:12px;">-</span>'}</td>
-                <td style="color:${chgColor}; font-weight:700; white-space:nowrap; font-size:13px;">
-                  ${s.changeRate !== 0 ? ((s.changeRate||0) >= 0 ? '▲' : '▼') + ' ' + Math.abs(s.changeRate||0).toFixed(2) + '%' : '<span style="color:#6b7280">-</span>'}
+                <td class="mkt-price" style="font-weight:700; color:white; white-space:nowrap; font-size:13px;">${s.price > 0 ? s.price.toLocaleString() + '<span style="font-size:10px; color:#6b7280; margin-left:2px;">원</span>' : '<span style="color:#4b5563; font-size:12px;">-</span>'}</td>
+                <td class="mkt-change" style="color:${chgColor}; font-weight:700; white-space:nowrap; font-size:13px;">
+                  ${s.changeRate !== 0 ? (isUp ? '▲' : '▼') + ' ' + Math.abs(s.changeRate||0).toFixed(2) + '%' : '<span style="color:#6b7280">-</span>'}
                 </td>
-                <td style="font-size:12px; color:#9ca3af; white-space:nowrap;">${s.volume > 0 ? (s.volume||0).toLocaleString() : '-'}</td>
+                <td class="mkt-volume" style="font-size:12px; color:#9ca3af; white-space:nowrap;">${s.volume > 0 ? (s.volume||0).toLocaleString() : '-'}</td>
                 <td style="font-size:11px; color:#6b7280; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${s.sector||'-'}">${s.sector||'-'}</td>
                 <td><span class="signal-${(s.signal||'HOLD').toLowerCase()}">${s.signal||'HOLD'}</span></td>
                 <td>
@@ -1746,29 +1938,31 @@ async function loadRecBuy(silent = false) {
 
     el.innerHTML = `
       <div style="padding:6px 4px;">
-        ${stocks.map((s, i) => `
+        ${stocks.map((s, i) => {
+          const isUp = (s.changeRate||0) >= 0
+          return `
           <div onclick="showStockDetail('${s.code}','${s.name}')"
-            style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; transition:background 0.2s; margin-bottom:1px; min-height:52px;"
-            onmouseover="this.style.background='rgba(249,115,22,0.06)'" onmouseout="this.style.background='transparent'">
-            <div style="width:22px; height:22px; border-radius:50%; background:${i===0?'var(--brand-gradient)':i===1?'rgba(249,115,22,0.3)':i===2?'rgba(249,115,22,0.15)':'rgba(255,255,255,0.05)'}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:${i<3?'white':'#4b5563'}; flex-shrink:0;">${i+1}</div>
-            <div style="flex:1; min-width:0;">
-              <div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">
-                <span style="font-size:13px; font-weight:700; color:white; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.name}</span>
-                <span style="font-size:9px; font-weight:700; color:${s.market==='KOSPI'?'#60a5fa':'#c084fc'}; border:1px solid ${s.market==='KOSPI'?'rgba(96,165,250,0.3)':'rgba(192,132,252,0.3)'}; border-radius:3px; padding:1px 4px; flex-shrink:0;">${s.market}</span>
+            style="border-bottom:1px solid rgba(255,255,255,0.04); padding:10px 12px 12px; cursor:pointer; transition:background 0.2s;"
+            onmouseover="this.style.background='rgba(34,197,94,0.05)'" onmouseout="this.style.background='transparent'">
+            <!-- 상단: 순위+이름+변동 -->
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+              <div style="width:20px; height:20px; border-radius:50%; background:${i===0?'linear-gradient(135deg,#e83a00,#f59e0b)':i===1?'rgba(249,115,22,0.3)':i===2?'rgba(249,115,22,0.15)':'rgba(255,255,255,0.05)'}; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; color:${i<3?'white':'#4b5563'}; flex-shrink:0;">${i+1}</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; font-weight:700; color:white; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.name} <span style="font-size:9px; font-weight:700; color:${s.market==='KOSPI'?'#60a5fa':'#c084fc'}; border:1px solid ${s.market==='KOSPI'?'rgba(96,165,250,0.25)':'rgba(192,132,252,0.25)'}; border-radius:3px; padding:0 4px;">${s.market}</span></div>
+                <div style="font-size:11px; color:#9ca3af; margin-top:1px;">${(s.price||0).toLocaleString()}원 <span style="color:${isUp?'#ef4444':'#3b82f6'}; font-weight:600;">${isUp?'▲':'▼'}${Math.abs(s.changeRate||0).toFixed(1)}%</span></div>
               </div>
-              <div style="display:flex; align-items:center; gap:5px;">
-                <span style="font-size:11px; color:#9ca3af;">${(s.price||0).toLocaleString()}원</span>
-                <span style="font-size:11px; color:${(s.changeRate||0)>=0?'#ef4444':'#3b82f6'}; font-weight:600;">${(s.changeRate||0)>=0?'▲':'▼'}${Math.abs(s.changeRate||0).toFixed(1)}%</span>
-              </div>
-            </div>
-            <div style="text-align:right; flex-shrink:0;">
-              <div style="font-size:13px; font-weight:800; color:#22c55e;">${s.strength||50}%</div>
-              <div style="width:44px; height:4px; background:#1f2937; border-radius:2px; margin-top:3px;">
-                <div style="width:${s.strength||50}%; height:100%; border-radius:2px; background:linear-gradient(90deg,#16a34a,#22c55e);"></div>
+              <div style="text-align:right; flex-shrink:0;">
+                <div style="font-size:14px; font-weight:800; color:#22c55e;">${s.strength||50}%</div>
+                <div style="font-size:9px; color:#4b5563;">강도</div>
               </div>
             </div>
-          </div>
-        `).join('')}
+            <!-- 추천 이유 -->
+            ${s.reason ? `<div style="display:flex; align-items:flex-start; gap:5px; background:rgba(34,197,94,0.05); border:1px solid rgba(34,197,94,0.1); border-radius:7px; padding:6px 8px;">
+              <i class="fas fa-lightbulb" style="font-size:10px; color:#22c55e; margin-top:1px; flex-shrink:0;"></i>
+              <span style="font-size:11px; color:#9ca3af; line-height:1.4;">${s.reason}</span>
+            </div>` : ''}
+          </div>`
+        }).join('')}
         ${stocks.length === 0 ? '<div style="text-align:center; color:#4b5563; padding:16px; font-size:13px;">추천 종목 없음</div>' : ''}
       </div>
     `
@@ -1815,21 +2009,25 @@ async function loadRecSell(silent = false) {
     const stocks = res.success ? res.stocks : []
 
     el.innerHTML = `
-      <div style="padding:6px 4px 10px;">
+      <div style="padding:4px 0;">
         ${stocks.map(s => `
           <div onclick="showStockDetail('${s.code}','${s.name}')"
-            style="display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border-radius:8px; cursor:pointer; transition:background 0.2s; min-height:48px;"
-            onmouseover="this.style.background='rgba(239,68,68,0.06)'" onmouseout="this.style.background='transparent'">
-            <div>
-              <div style="font-size:13px; font-weight:600; color:white;">${s.name}
-                <span style="font-size:9px; color:${s.market==='KOSPI'?'#60a5fa':'#c084fc'}; margin-left:4px;">${s.market}</span>
+            style="border-bottom:1px solid rgba(255,255,255,0.04); padding:9px 12px 11px; cursor:pointer; transition:background 0.2s;"
+            onmouseover="this.style.background='rgba(239,68,68,0.05)'" onmouseout="this.style.background='transparent'">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
+              <div>
+                <span style="font-size:13px; font-weight:600; color:white;">${s.name}</span>
+                <span style="font-size:9px; color:${s.market==='KOSPI'?'#60a5fa':'#c084fc'}; margin-left:5px; border:1px solid ${s.market==='KOSPI'?'rgba(96,165,250,0.25)':'rgba(192,132,252,0.25)'}; border-radius:3px; padding:0 4px;">${s.market}</span>
               </div>
-              <div style="font-size:11px; color:#3b82f6; margin-top:1px;">▼ ${Math.abs(s.changeRate||0).toFixed(1)}%</div>
+              <div style="text-align:right;">
+                <span style="font-size:11px; font-weight:700; color:#ef4444; background:rgba(239,68,68,0.1); padding:2px 8px; border-radius:5px;">매도 ${s.strength||50}%</span>
+              </div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:12px; font-weight:700; color:#ef4444;">SELL</div>
-              <div style="font-size:11px; color:#6b7280;">${s.strength||50}%</div>
-            </div>
+            <div style="font-size:11px; color:#6b7280; margin-bottom:4px;">${(s.price||0).toLocaleString()}원 <span style="color:#3b82f6; font-weight:600;">▼ ${Math.abs(s.changeRate||0).toFixed(1)}%</span></div>
+            ${s.reason ? `<div style="display:flex; align-items:flex-start; gap:5px; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); border-radius:7px; padding:5px 8px;">
+              <i class="fas fa-exclamation-triangle" style="font-size:9px; color:#ef4444; margin-top:2px; flex-shrink:0;"></i>
+              <span style="font-size:10px; color:#9ca3af; line-height:1.4;">${s.reason}</span>
+            </div>` : ''}
           </div>
         `).join('')}
         ${stocks.length === 0 ? '<div style="text-align:center; color:#4b5563; padding:14px; font-size:12px;">주의 종목 없음</div>' : ''}
@@ -3428,6 +3626,9 @@ function renderTickerBar(stocks) {
 let cryptoData = []
 let cryptoSelectedCoin = null
 let cryptoAutoRefreshTimer = null
+let cryptoPrevPrices = {}       // 이전 가격 (색상 깜빡임)
+let cryptoCountdownTimer = null // 카운트다운 타이머
+let cryptoCountdown = 120       // 120초 카운트다운
 
 async function renderCrypto() {
   const container = document.getElementById('page-content')
@@ -3447,12 +3648,20 @@ async function renderCrypto() {
           <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">코인마켓캡 시총 상위 10개 코인의 AI 기반 매매 시그널</p>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
-          <div id="crypto-last-updated" style="font-size:11px; color:#4b5563; background:rgba(255,255,255,0.03); padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
-            <i class="fas fa-sync-alt" style="margin-right:5px; color:#f7931a;"></i>로딩 중...
+          <div style="display:flex; align-items:center; gap:8px;">
+            <!-- LIVE 표시 -->
+            <div style="display:flex; align-items:center; gap:5px; background:rgba(34,197,94,0.07); border:1px solid rgba(34,197,94,0.18); border-radius:16px; padding:5px 10px;">
+              <div id="crypto-live-dot" style="width:6px; height:6px; background:#22c55e; border-radius:50%; box-shadow:0 0 5px #22c55e; animation:cryptoPulse 2s ease-in-out infinite;"></div>
+              <span style="font-size:10px; color:#22c55e; font-weight:700;">LIVE</span>
+              <span style="font-size:10px; color:#4b5563;" id="crypto-countdown">2:00</span>
+            </div>
+            <div id="crypto-last-updated" style="font-size:11px; color:#4b5563; background:rgba(255,255,255,0.03); padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+              <i class="fas fa-sync-alt" style="margin-right:5px; color:#f7931a;"></i>로딩 중...
+            </div>
+            <button onclick="refreshCryptoData()" style="background:linear-gradient(135deg,#f7931a,#f59e0b); border:none; color:white; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
+              <i class="fas fa-sync-alt" id="crypto-refresh-icon"></i> 새로고침
+            </button>
           </div>
-          <button onclick="refreshCryptoData()" style="background:linear-gradient(135deg,#f7931a,#f59e0b); border:none; color:white; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
-            <i class="fas fa-sync-alt" id="crypto-refresh-icon"></i> 새로고침
-          </button>
         </div>
       </div>
 
@@ -3511,12 +3720,28 @@ async function renderCrypto() {
 
   await loadCryptoData()
 
-  // 2분마다 자동 갱신
+  // 2분마다 자동 갱신 + 카운트다운
   if (cryptoAutoRefreshTimer) clearInterval(cryptoAutoRefreshTimer)
+  if (cryptoCountdownTimer)   clearInterval(cryptoCountdownTimer)
+  cryptoCountdown = 120
   cryptoAutoRefreshTimer = setInterval(() => {
-    if (document.getElementById('crypto-content')) loadCryptoData()
-    else clearInterval(cryptoAutoRefreshTimer)
+    if (document.getElementById('crypto-content')) {
+      cryptoCountdown = 120
+      loadCryptoData()
+    } else {
+      clearInterval(cryptoAutoRefreshTimer)
+      clearInterval(cryptoCountdownTimer)
+    }
   }, 120000)
+  // 카운트다운 타이머 (1초마다)
+  cryptoCountdownTimer = setInterval(() => {
+    const el = document.getElementById('crypto-countdown')
+    if (!el) { clearInterval(cryptoCountdownTimer); return }
+    cryptoCountdown = Math.max(0, cryptoCountdown - 1)
+    const m = Math.floor(cryptoCountdown / 60)
+    const s = cryptoCountdown % 60
+    el.textContent = `${m}:${s.toString().padStart(2,'0')}`
+  }, 1000)
 }
 
 async function loadCryptoData() {
@@ -3525,13 +3750,36 @@ async function loadCryptoData() {
     if (refreshIcon) refreshIcon.style.animation = 'spin 1s linear infinite'
 
     const res = await api.get('/crypto/top10')
-    cryptoData = res.coins || []
+    const prevPricesCopy = { ...cryptoPrevPrices }
+    const newCoins = res.coins || []
+    
+    // 이전 가격 기록
+    newCoins.forEach(c => { cryptoPrevPrices[c.id] = c.price })
+    cryptoData = newCoins
 
     document.getElementById('crypto-loading').style.display = 'none'
     document.getElementById('crypto-content').style.display = 'block'
 
     renderCryptoSummary()
     renderCryptoCards()
+    
+    // 가격 변동 깜빡임 효과 적용
+    if (Object.keys(prevPricesCopy).length > 0) {
+      cryptoData.forEach(coin => {
+        const prev = prevPricesCopy[coin.id]
+        if (prev === undefined) return
+        const card = document.querySelector(`.crypto-card[data-id="${coin.id}"]`)
+        if (!card) return
+        const isUp = coin.price >= prev
+        const changed = Math.abs(coin.price - prev) > 0.0001
+        if (changed) {
+          const flash = isUp ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.2)'
+          card.style.transition = 'box-shadow 0.15s'
+          card.style.boxShadow = `0 0 20px ${flash}`
+          setTimeout(() => { card.style.boxShadow = '' }, 1000)
+        }
+      })
+    }
 
     const now = new Date()
     const updEl = document.getElementById('crypto-last-updated')
@@ -3741,15 +3989,24 @@ function renderCoinCard(coin, idx) {
           </div>
         </div>
         <!-- 근거 -->
-        <div style="font-size:10px; color:#6b7280; line-height:1.5; min-height:28px;" title="${sig.reason.join(' / ')}">
-          ${sig.reason.slice(0,2).join(' · ')}
+        <div style="border-top:1px solid rgba(255,255,255,0.04); padding-top:7px; margin-top:2px;">
+          ${sig.reason.slice(0,3).map(r => `
+            <div style="font-size:10px; color:#6b7280; line-height:1.6; display:flex; align-items:flex-start; gap:4px;">
+              <span style="color:${sc}; flex-shrink:0; margin-top:1px;">›</span><span>${r}</span>
+            </div>`).join('')}
         </div>
       </div>
     `
   }).join('')
 
+  // 이전 가격과 비교해 방향 결정
+  const prevPrice = cryptoPrevPrices[coin.id]
+  const priceDir = prevPrice === undefined ? 0 : (coin.price > prevPrice ? 1 : coin.price < prevPrice ? -1 : 0)
+  const priceDirColor = priceDir > 0 ? '#ef4444' : priceDir < 0 ? '#3b82f6' : 'transparent'
+  const priceGlow = priceDir > 0 ? '0 0 12px rgba(239,68,68,0.4)' : priceDir < 0 ? '0 0 12px rgba(59,130,246,0.4)' : 'none'
+
   return `
-    <div class="crypto-card" style="background:rgba(16,20,28,0.97); border:1px solid rgba(255,255,255,0.07); border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.35);">
+    <div class="crypto-card" data-id="${coin.id}" style="background:rgba(16,20,28,0.97); border:1px solid rgba(255,255,255,0.07); border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.35);">
 
       <!-- ── 코인 헤더 ─────────────────────────── -->
       <div style="padding:18px 20px 16px; background:linear-gradient(135deg,rgba(247,147,26,0.06),transparent); border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -3772,7 +4029,10 @@ function renderCoinCard(coin, idx) {
 
           <!-- 가격 블록 -->
           <div style="text-align:right; min-width:140px;">
-            <div style="font-size:clamp(17px,2.2vw,24px); font-weight:800; color:white; letter-spacing:-0.01em;">${formatPrice(coin.price)}</div>
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+              ${priceDir !== 0 ? `<span style="font-size:11px; font-weight:900; color:${priceDirColor}; text-shadow:${priceGlow}; animation:cryptoPulse 0.8s ease-out 2;">${priceDir > 0 ? '▲' : '▼'}</span>` : ''}
+              <div style="font-size:clamp(17px,2.2vw,24px); font-weight:800; color:white; letter-spacing:-0.01em; ${priceDir !== 0 ? `text-shadow:${priceGlow};` : ''}">${formatPrice(coin.price)}</div>
+            </div>
             <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:4px; flex-wrap:wrap;">
               <span style="font-size:11px; color:${coin.change1h>=0?'#22c55e':'#ef4444'}; font-weight:600; background:${coin.change1h>=0?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'}; padding:1px 7px; border-radius:4px;">
                 1h ${coin.change1h>=0?'+':''}${coin.change1h.toFixed(2)}%

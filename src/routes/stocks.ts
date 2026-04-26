@@ -424,34 +424,59 @@ async function fetchKiwoomDayChart(
 // BUY >= 65 / SELL <= 38 / 최대 80 / 기본 50
 // (+5% 이상 BUY, -1.5% 이하 SELL, 소폭 등락은 HOLD)
 function autoSignal(changeRate: number, volume: number): { signal: string; strength: number } {
-  let score = 50
+  const result = autoSignalWithReason(changeRate, volume)
+  return { signal: result.signal, strength: result.strength }
+}
 
-  if      (changeRate >= 10)   score += 28   // 78 → BUY
-  else if (changeRate >= 7)    score += 22   // 72 → BUY
-  else if (changeRate >= 5)    score += 16   // 66 → BUY
-  else if (changeRate >= 3)    score += 10   // 60 → HOLD
-  else if (changeRate >= 1.5)  score += 5    // 55 → HOLD
-  else if (changeRate >= 0.5)  score += 2    // 52 → HOLD
-  else if (changeRate >= 0)    score += 0    // 50 → HOLD
-  else if (changeRate >= -1)   score -= 5    // 45 → HOLD
-  else if (changeRate >= -2)   score -= 12   // 38 → SELL 경계
-  else if (changeRate >= -3)   score -= 20   // 30 → SELL
-  else if (changeRate >= -5)   score -= 28   // 22 → SELL
-  else                         score -= 35   // 15 → 강한 SELL
+function autoSignalWithReason(
+  changeRate: number,
+  volume: number,
+  price?: number,
+  change?: number,
+  high?: number,
+  low?: number
+): { signal: string; strength: number; reasons: string[] } {
+  let score = 50
+  const reasons: string[] = []
+
+  if      (changeRate >= 10)   { score += 28; reasons.push(`급등 +${changeRate.toFixed(1)}% (강한 매수세)`) }
+  else if (changeRate >= 7)    { score += 22; reasons.push(`큰 폭 상승 +${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= 5)    { score += 16; reasons.push(`상승세 +${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= 3)    { score += 10; reasons.push(`소폭 상승 +${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= 1.5)  { score += 5;  reasons.push(`미약한 상승 +${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= 0.5)  { score += 2;  reasons.push(`보합 +${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= 0)    { score += 0;  reasons.push(`보합세 ${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= -1)   { score -= 5;  reasons.push(`소폭 하락 ${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= -2)   { score -= 12; reasons.push(`하락 ${changeRate.toFixed(1)}% (매도 경계)`) }
+  else if (changeRate >= -3)   { score -= 20; reasons.push(`하락세 ${changeRate.toFixed(1)}%`) }
+  else if (changeRate >= -5)   { score -= 28; reasons.push(`큰 폭 하락 ${changeRate.toFixed(1)}%`) }
+  else                         { score -= 35; reasons.push(`급락 ${changeRate.toFixed(1)}% (강한 매도세)`) }
 
   // 거래량 보정 (±3 이하로 최소화)
-  if      (volume > 5_000_000) score += 3
-  else if (volume > 2_000_000) score += 2
-  else if (volume > 1_000_000) score += 1
-  else if (volume < 100_000)   score -= 3
-  else if (volume < 300_000)   score -= 1
+  if      (volume > 5_000_000) { score += 3; reasons.push('거래량 폭발적 (5백만주↑)') }
+  else if (volume > 2_000_000) { score += 2; reasons.push('거래량 활발 (2백만주↑)') }
+  else if (volume > 1_000_000) { score += 1; reasons.push('거래량 양호 (1백만주↑)') }
+  else if (volume < 100_000)   { score -= 3; reasons.push('거래량 부족 (10만주↓)') }
+  else if (volume < 300_000)   { score -= 1; reasons.push('거래량 저조') }
+
+  // 고가/저가 기반 추가 분석
+  if (price && high && low && high > low) {
+    const position = (price - low) / (high - low)
+    if (position > 0.85) { score += 2; reasons.push(`당일 고점 근접 (${(position*100).toFixed(0)}%)`) }
+    else if (position < 0.15) { score -= 2; reasons.push(`당일 저점 근접 (${(position*100).toFixed(0)}%)`) }
+  }
 
   score = Math.min(80, Math.max(5, score))
+  const signal = score >= 65 ? 'BUY' : score <= 38 ? 'SELL' : 'HOLD'
 
-  return {
-    signal:   score >= 65 ? 'BUY' : score <= 38 ? 'SELL' : 'HOLD',
-    strength: score,
+  // 시그널별 종합 요약 이유 추가
+  if (signal === 'BUY' && !reasons.some(r => r.includes('매수'))) {
+    reasons.unshift('📈 기술적 매수 조건 충족')
+  } else if (signal === 'SELL' && !reasons.some(r => r.includes('매도'))) {
+    reasons.unshift('📉 기술적 매도 조건 충족')
   }
+
+  return { signal, strength: score, reasons: reasons.slice(0, 3) }
 }
 
 
@@ -802,17 +827,28 @@ async function enrichWithSignals(stocks: any[], db: D1Database) {
       if (!signalMap[sig.stock_code]) signalMap[sig.stock_code] = sig
     }
     return stocks.map(stock => {
-      const auto = autoSignal(stock.changeRate || 0, stock.volume || 0)
+      const auto = autoSignalWithReason(
+        stock.changeRate || 0,
+        stock.volume || 0,
+        stock.price,
+        stock.change,
+        stock.high,
+        stock.low
+      )
       const db_  = signalMap[stock.code]
       return {
         ...stock,
         signal:   db_ ? db_.signal_type : auto.signal,
         strength: db_ ? db_.strength    : auto.strength,
+        reasons:  auto.reasons,
         sector:   stock.sector || '',
       }
     })
   } catch {
-    return stocks.map(s => ({ ...s, ...autoSignal(s.changeRate || 0, s.volume || 0) }))
+    return stocks.map(s => {
+      const auto = autoSignalWithReason(s.changeRate || 0, s.volume || 0, s.price, s.change)
+      return { ...s, ...auto }
+    })
   }
 }
 
@@ -968,7 +1004,7 @@ stockRoutes.get('/:code', async (c) => {
       chartData = generateMockChartData(stock.price)
     }
 
-    const sig = autoSignal(stock.changeRate || 0, stock.volume || 0)
+    const sig = autoSignalWithReason(stock.changeRate || 0, stock.volume || 0, stock.price, stock.change)
     return c.json({
       success: true,
       stock: { ...stock, ...sig },
